@@ -52,16 +52,22 @@ def Split(image):
     #The idea is that this split will show free spaces between chars as length of zeros
     #we find all values that are zero
     zerosX = np.asarray(np.where(imgCols == 0))
+    #also compute letter widths
+    widthX = np.asarray(np.where(imgCols != 0))
     #and create a list of consecutive sequences
     zerosX = consecutive(zerosX[0])
+    widthX = consecutive(widthX[0])
     #now just convert to list split lines
     spaces = []
+    widths = []
     spaceLen = []
     for z in zerosX:
         spaces.append((z[-1] + z[0]) / 2)
         spaceLen.append(z[-1] - z[0])
+    for z in widthX:
+        widths.append(z[-1] - z[0])
     #create an array of indices sorted by space length excluding first and last space
-    print [i[0] for i in sorted(enumerate(spaceLen), key=lambda x:x[1])\
+    spaceLen = [i[0] for i in sorted(enumerate(spaceLen), key=lambda x:x[1])\
            if i[0] != 0 and i[0] != len(spaces)-1]
     
     #to create boundingbox we can do the same to 2nd dimension [x,x,y,y]
@@ -73,11 +79,46 @@ def Split(image):
     h = float(boundingBox[3] - boundingBox[2])
     w = float(boundingBox[1] - boundingBox[0])
     cuts = len(spaces)
-    print round(w/h)
-    #if disparity between spaces and shape factor - try to join two spaces
+    letterNo = round(w/h)
     
+    #LETTER MERGING PROCEDURE
+    #If letter is below a threshold - join it to nearest one with smallest width
+    # () - letter, _ - space:
+    # _()_()_(_)_()_ ====> _()_()_()_()_ delete space between them and join two consecutive widths
+    w_threshold = h * 0.4 #coefficient determines minimum width percentage
+    print widths
+    i = 0
+    while (i < len(widths)):
+        if widths[i] < w_threshold:
+            if i == 0:
+                #beggining of sequence
+                widths[i+1] += widths[i]
+                spaces.pop(i+1)
+                print "merge beginning"
+            elif i == (len(widths) -1):
+                #end of sequence
+                if i == 0:
+                    continue
+                widths[i-1] += widths[i]
+                spaces.pop(-2)
+                print "merge end"
+            else:
+                #somwhere in between
+                if widths[i-1] < widths[i+1]:
+                    #merge left
+                    widths[i-1] += widths[i]
+                    spaces.pop(i)
+                else:
+                    #merge right
+                    widths[i+1] += widths[i]
+                    spaces.pop(i+1)
+                print "merge middle"
+            widths.pop(i)
+        else:
+            i += 1
+        
     start = spaces[0]
-    print("CUTS - ", cuts)
+    print("CUTS - ", len(spaces))
     for s in spaces:
         if start == s:
             continue
@@ -95,12 +136,14 @@ def SplitWords(cutouts):
     for c in cutouts:
         h = float(c.shape[0])
         w = float(c.shape[1])
-        if (w/h - 1.0) < shapeMargin:
-            retCnt.append(c)
-            continue
+        #if (w/h - 1.0) < shapeMargin:
+        #    retCnt.append(c)
+        #    continue
         words = Split(c)
         retCnt += words
-
+def Normalize(cutouts):
+    #center and scale letter to 64 x 63 pix (ETL datasets)
+    return cutouts
 
 #MAIN
 #get list of source images in images folder
@@ -130,6 +173,7 @@ while True:
     rectImg = DrawContours(resImg, contours)
     cutouts = CutoutWords(resImg, contours)
     cutouts = SplitWords(cutouts)
+    cutouts = Normalize(cutouts)
     cv2.imshow('display',rectImg)
     if key == 27: #escape key 
         break
