@@ -3,16 +3,20 @@ import numpy as np
 from os import listdir
 from os.path import isfile, join
 from controls import Controls
+import time
 
 def PreprocessingOCR(image, ctrl, resImg):
     resImg = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    #5 for median blur seems to be a good denoising strategy
-    resImg = cv2.medianBlur(resImg,ctrl.t[2] - (ctrl.t[2] + 1) %2 + 2)
+    #5 for median blur seems to be a good denoising strategy - does not work well without acceleration
+    #timeStart = time.time()
+    resImg = cv2.medianBlur(resImg,(ctrl.t[2] - (ctrl.t[2] + 1) %2 + 2))
     mask = cv2.adaptiveThreshold(resImg, ctrl.t[1], cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
                                          cv2.THRESH_BINARY, 19,3)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
     mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel,1)
     mask = cv2.erode(mask,kernel,3)
+    
+    #print (time.time() - timeStart)
     return mask
 def SegmentWords(mask, ctrl):
     tmp = cv2.bitwise_not(mask)
@@ -152,7 +156,7 @@ if len(imageList) == 0:
     raise StandardError("No files in images/ directory")
 #initialize window and control panel positions with stock trackbars
 cv2.namedWindow('display', cv2.WINDOW_NORMAL)
-controlsList = [(0,150,255), (0,255,255), (3,3,10), (0,0,len(imageList) - 1)]
+controlsList = [(0,150,255), (0,255,255), (3,5,10), (0,0,len(imageList) - 1)]
 ctrl = Controls(controlsList)
 cv2.resizeWindow('display', 800,600)
 cv2.moveWindow('display', 100,0)
