@@ -12,9 +12,9 @@ def PreprocessingOCR(image, ctrl, resImg):
     resImg = cv2.medianBlur(resImg,(ctrl.t[2] - (ctrl.t[2] + 1) %2 + 2))
     mask = cv2.adaptiveThreshold(resImg, ctrl.t[1], cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
                                          cv2.THRESH_BINARY, 19,3)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
-    mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel,1)
-    mask = cv2.erode(mask,kernel,3)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+    mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel,2)
+    #mask = cv2.erode(mask,kernel,3)
     
     #print (time.time() - timeStart)
     return mask
@@ -48,11 +48,13 @@ def CutoutWords(image, cnts):
 def consecutive(data, stepsize=1):
     return np.split(data, np.where(np.diff(data) != stepsize)[0]+1)
 def Split(image):
-    print image.shape
+    #print image.shape
     chars = []
     #analyze columns for splits
     invImg = np.invert(image)
     imgCols = invImg.sum(0)
+    noBorderL = False if imgCols[0] == 0 else True
+    noBorderR = False if imgCols[-1] == 0 else True
     #The idea is that this split will show free spaces between chars as length of zeros
     #we find all values that are zero
     zerosX = np.asarray(np.where(imgCols == 0))
@@ -76,6 +78,9 @@ def Split(image):
     
     #to create boundingbox we can do the same to 2nd dimension [x,x,y,y]
     imgCols = invImg.sum(1)
+    #modify a little so we can get bounds even on black pixels
+    imgCols[0] = 0
+    imgCols[-1] = 0
     zerosY = np.asarray(np.where(imgCols == 0))
     zerosY = consecutive(zerosY[0])
     boundingBox = [zerosX[0][-1], zerosX[-1][0],zerosY[0][-1], zerosY[-1][0]]
@@ -90,22 +95,27 @@ def Split(image):
     # () - letter, _ - space:
     # _()_()_(_)_()_ ====> _()_()_()_()_ delete space between them and join two consecutive widths
     w_threshold = h * 0.4 #coefficient determines minimum width percentage
-    print widths
+    #print widths
     i = 0
+    # add fake borders to merge to
+    if noBorderL:
+        spaces.insert(0,0)
+    if noBorderR:
+        spaces.append(image.shape[1] - 1)
+        
     while (i < len(widths)):
-        if widths[i] < w_threshold:
+        #print(noBorderL, noBorderR, i, len(widths), len(spaces))
+        if widths[i] < w_threshold and len(widths) > 1:
             if i == 0:
                 #beggining of sequence
                 widths[i+1] += widths[i]
                 spaces.pop(i+1)
-                print "merge beginning"
             elif i == (len(widths) -1):
                 #end of sequence
                 if i == 0:
                     continue
                 widths[i-1] += widths[i]
                 spaces.pop(-2)
-                print "merge end"
             else:
                 #somwhere in between
                 if widths[i-1] < widths[i+1]:
@@ -116,21 +126,18 @@ def Split(image):
                     #merge right
                     widths[i+1] += widths[i]
                     spaces.pop(i+1)
-                print "merge middle"
             widths.pop(i)
         else:
             i += 1
         
     start = spaces[0]
-    print("CUTS - ", len(spaces))
     for s in spaces:
         if start == s:
             continue
-        letter = image[:,start:s]       
+        letter = image[:,start:s]
         chars.append(letter)
-        cv2.imshow('display',letter)
-        cv2.waitKey(10000)
         start = s
+
     return chars
             
 def SplitWords(cutouts):
@@ -145,8 +152,51 @@ def SplitWords(cutouts):
         #    continue
         words = Split(c)
         retCnt += words
+    return retCnt
 def Normalize(cutouts):
-    #center and scale letter to 64 x 63 pix (ETL datasets)
+    #center and scale letter to 75x75 pix (~ETL datasets)
+    dimx = 75
+    dimy = 75
+    for c in cutouts:
+
+        #getbounding box of the fragment
+        invImg = np.invert(c)
+        xsum = invImg.sum(0)
+        ysum = invImg.sum(1)
+        xBlack = np.asarray(np.where(xsum != 0))
+        xBlack = xBlack[0]
+        yBlack = np.asarray(np.where(ysum != 0))
+        yBlack = yBlack[0]
+        if xBlack.shape[0] == 0 or yBlack.shape[0] == 0:
+            print "Error- white box letter"
+            print ("SHAPE - ",c.shape)
+            print c
+            cutouts.remove(c)
+            continue
+        #we now can estimate the bounding box of the character
+        #we wantto scale it and fit to center of whitebackground
+        #c = c[xBlack[0]:xBlack[-1], yBlack[0]: yBlack[-1]]
+        c = c[yBlack[0]: yBlack[-1],xBlack[0]:xBlack[-1]]
+        out = np.zeros((dimx,dimy), np.uint8)
+        #it would be good to preserve shape factor
+        #add 10% border, preserve scale
+        xBorder = 0
+        yBorder = 0
+        if c.shape[0] > c.shape[1]:
+            yBorder = int(0.1*float(c.shape[0]))
+            xBorder = ((2 * xBorder + c.shape[0]) - c.shape[1]) / 2
+        else:
+            xBorder = int(0.1*float(c.shape[1]))
+            yBorder = ((2 * yBorder + c.shape[1]) - c.shape[0]) / 2
+        #print(xBorder, yBorder)
+        c = cv2.copyMakeBorder(c, top=yBorder, bottom=yBorder, \
+                                  left=xBorder, right=xBorder,\
+                                  borderType= cv2.BORDER_CONSTANT, value=[255,255,255] )
+        c = cv2.resize(c,((dimx),(dimy)))
+        c = cv2.GaussianBlur(c,(3,3),0)
+        cv2.imshow('display',c)
+
+        cv2.waitKey(10000)
     return cutouts
 
 #MAIN
