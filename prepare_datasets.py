@@ -11,6 +11,7 @@ from scipy import ndimage
 from six.moves.urllib.request import urlretrieve
 from six.moves import cPickle as pickle
 from JISX201 import JISX201Dict
+import cv2
 
 last_percent_reported = None
 def download_progress_hook(count, blockSize, totalSize):
@@ -79,18 +80,6 @@ ETL6path = maybeExtract(dataRoot, "ETL6.zip")
 
 #extract datasets
 
-
-
-def shift_jis2unicode(charcode): # charcode is an integer
-    print charcode
-    if charcode <= 0xFF:
-        shift_jis_string = chr(charcode)
-    else:
-        shift_jis_string = chr(charcode >> 8) + chr(charcode & 0xFF)
-
-    unicode_string = shift_jis_string.decode('shift-jis')
-    assert len(unicode_string) == 1
-    return ord(unicode_string)
 def unpack_ETL1(sourceDir, destDir):
     d = JISX201Dict()
     onlyfiles = [f for f in os.listdir(sourceDir) if os.path.isfile(os.path.join(sourceDir, f)) and f.find("ETL") != -1]
@@ -128,7 +117,10 @@ def unpack_ETL1(sourceDir, destDir):
                         character.append(d[r[3]])
                     elif len(character) > 1 and d[r[3]] != character[-1]:
                         character.append(d[r[3]])
-                    
+                else:
+                    skip += 1
+                    acc[5] += 1
+                    continue
                 iF = Image.frombytes('F', (64, 63), r[18], 'bit', 4)
                 iP = iF.convert('P')
                 iT = iP.convert('RGB')
@@ -136,11 +128,10 @@ def unpack_ETL1(sourceDir, destDir):
                 #iP.save(fn, 'PNG', bits=4)
                 enhancer = ImageEnhance.Brightness(iP)
                 iE = enhancer.enhance(16)
-                path = os.path.join(destDir, "%d" % (struct.unpack('H', r[1])[0]))
+                path = os.path.join(destDir, "%d" % ord(d[r[3]].decode('utf-8')))
                 if not os.path.exists(path):
                     print path
                     os.makedirs(path)
-                #print r[5]
                 acc[min(int(r[5]),5)] +=1
                 if r[5] == 0 and int(r[3]) != 0:               
                     iE.save(os.path.join(path,fn), 'PNG')
@@ -202,6 +193,18 @@ def Normalize(c, oSize):
     c = cv2.resize(c,((dimx),(dimy)))
     c = cv2.GaussianBlur(c,(3,3),0)
     return c
+def preproc_ETL1(sourceDir, destDir, iSize, oSize):
+    image_files = os.listdir(sourceDir)
+    for image in image_files:
+        image_file = os.path.join(sourceDir, image)
+        tmpImg = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
+        tmpImg = Filter(tmpImg)
+        tmpImg = Normalize(tmpImg, oSize)
+        if tmpImg == None:
+            print "Invalid element %s" % (image)
+            continue
+        
+        cv2.imwrite(os.path.join(destDir,image),tmpImg)
     
 def load_letter(folder, iSize, oSize):
     image_files = os.listdir(folder)
@@ -212,8 +215,6 @@ def load_letter(folder, iSize, oSize):
     for image in image_files:
         image_file = os.path.join(folder, image)
         tmpImg = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
-        tmpImg = Filter(tmpImg)
-        tmpImg = Normalize(tmpImg, oSize)
         if tmpImg == None:
             print "Invalid element %s" % (image)
             errNum +=1
@@ -227,5 +228,79 @@ def load_letter(folder, iSize, oSize):
     #print('Mean:', np.mean(dataset))
     #print('Standard deviation:', np.std(dataset))
     return dataset
+def process_ETL1(sourceDir, destDir):
+    letFolders = [f for f in os.listdir(sourceDir) if os.path.isfile(os.path.join(sourceDir,f)) == False]
+    for f in letFolders:
+        destPath = os.path.join(destDir,f)
+        if not os.path.exists(destPath):
+            print destPath
+            os.makedirs(destPath)
+        data = preproc_ETL1(os.path.join(sourceDir,f), \
+                               os.path.join(destDir,f),(63,64), (75,75))
         
-unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
+
+        
+def innerLabels(d):
+    d = sorted(d)
+    cnt = 0
+    b = []
+    #create mapping of folder int name in unicode to class count
+    for it in d:
+        b.append((unichr(int(it[1])), cnt))
+        cnt += 1
+    return dict(b), cnt
+def maybePickle(baseDir, dataPath, force=False):
+    letFolders = [f for f in os.listdir(dataPath) if os.path.isfile(os.path.join(dataPath,f)) == False]
+    #find unique enumeration for data labels -dictionary map of unicode - int
+    labels, labelcount = innerLabels(letFolders)
+    #We pack data into two datasets - validation and training
+    # each letter has a label
+    train_dataset = np.ndarray(shape=(0,75,75), dtype=np.uint8)
+    train_labels = np.ndarray(shape =(0), dtype=np.unicode0)
+    test_dataset = np.ndarray(shape=(0,75,75), dtype=np.uint8)
+    test_labels = np.ndarray(shape =(0), dtype=np.unicode0)
+
+    test_ratio = 0.05
+    for f in letFolders:
+        data = load_letter(os.path.join(dataPath, f),(63,64), (75,75))
+        if data != None:
+            print u"%s" % (unichr(int(f)))
+            print("Letter",  unichr(int(f)),f)
+            setSize = data.shape[0]
+            testCount = int(setSize * test_ratio)
+            trainCount= setSize - testCount
+            train_dataset = np.vstack((train_dataset, data[0:trainCount - 1,:,:]))
+            train_labels = np.hstack((train_labels, np.array((trainCount - 1)*[unichr(int(f))])))
+            test_dataset = np.vstack((test_dataset, data[trainCount:setSize,:,:]))
+            test_labels = np.hstack((test_labels, np.array(testCount*[unichr(int(f))])))
+        else:
+            print ("No such letter", unichr(int(f)))
+        #data = load_letter(os.path.join(baseDir, f),(63,64), (75,75))
+    #package letter data to ETL.pickle file:
+    train_dataset, train_labels = randomize(train_dataset, train_labels)
+    test_dataset, test_labels = randomize(test_dataset, test_labels)
+    print train_dataset.shape
+    print train_labels.shape
+    print test_dataset.shape
+    print test_labels.shape
+    print ("%d unique labels" % (labelcount))
+    pickle_file = os.path.join(baseDir,'ETL.pickle')
+    try:
+        f = open(pickle_file, 'wb')
+        #TODO - save also unicode TLB int - unicode dictionary for dataset
+        save = {
+            'train_dataset': train_dataset,
+            'train_labels': train_labels,
+            'test_dataset': test_dataset,
+            'test_labels': test_labels,
+            'label_map':labels,
+            }
+        pickle.dump(save, f, pickle.HIGHEST_PROTOCOL)
+        f.close()
+    except Exception as e:
+        print('Unable to save data to', pickle_file, ':', e)
+        raise
+    
+#unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
+#process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
+maybePickle(dataRoot, os.path.join(dataRoot,"data"))
