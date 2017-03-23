@@ -156,76 +156,74 @@ def unpack_ETL1(sourceDir, destDir):
 def unpack_ETL8B(sourceDir, destDir):
     onlyfiles = [f for f in os.listdir(sourceDir) if os.path.isfile(os.path.join(sourceDir, f)) and f.find("ETL8B2") != -1]
     for filename in onlyfiles:
-    print "Unpacking" + filename
-    with open(os.path.join(sourceDir,filename), 'r') as f:
-        f.seek(0)
-        skip = 1
-        acc = 6*[0]
-        character = []
-        while True:
-            f.seek(skip * 512)
-            s = f.read(512)
-            if s is None or len(s) == 0:
-                break
-            #H - unsigned shord
-            #2s - ss -char char
-            #H - insigned short
-            #6B - unsigned char
-            #I uint
-            #4H ushort
-            #4B uchar
-            #4x pas bytes
-            #2016s string - char
-            #4x pad bytes
-            if len(s) < 2052:
-                print "EOF"
-                skip+=1
-                continue
-            r = struct.unpack('>H2sH6BI4H4B4x2016s4x', s)
-                  s = f.read(512)
-    r = struct.unpack('>2H4s504s', s)
-    i1 = Image.frombytes('1', (64, 63), r[3], 'raw')
-            
-            if int(r[3]) != 0:
-                if len(character) == 0:
-                    character.append(d[r[3]])
-                elif len(character) == 1 and d[r[3]] != character[0]:
-                    character.append(d[r[3]])
-                elif len(character) > 1 and d[r[3]] != character[-1]:
-                    character.append(d[r[3]])
-            else:
-                skip += 1
-                acc[5] += 1
-                continue
-            #exclude some characters, unimportant to the dataset
-            if excludeChars(d[r[3]]):
-                skip += 1
-                continue
-            iF = Image.frombytes('F', (64, 63), r[18], 'bit', 4)
-            iP = iF.convert('P')
-            iT = iP.convert('RGB')
-            fn = "{:1d}{:4d}{:2x}.png".format(r[0], r[2], r[3])
-            #iP.save(fn, 'PNG', bits=4)
-            enhancer = ImageEnhance.Brightness(iP)
-            iE = enhancer.enhance(16)
-            path = os.path.join(destDir, "%d" % ord(d[r[3]].decode('utf-8')))
-            if not os.path.exists(path):
-                print path
-                os.makedirs(path)
-            acc[min(int(r[5]),5)] +=1
-            if r[5] == 0 and int(r[3]) != 0:               
-                iE.save(os.path.join(path,fn), 'PNG')
-            skip += 1
-        for c in character:
-            print c
-        print "Quality assesment:"
-        character = []
-        print(acc)
+      print ("Unpacking" + filename)
+      with open(os.path.join(sourceDir,filename), 'r') as f:
+          f.seek(0)
+          skip = 1
+          acc = 6*[0]
+          character = []
+          while True:
+              f.seek(skip * 512)
+              s = f.read(512)
+              if s is None or len(s) == 0:
+                  break
+              #H - unsigned shord
+              #2s - ss -char char
+              #H - insigned short
+              #6B - unsigned char
+              #I uint
+              #4H ushort
+              #4B uchar
+              #4x pas bytes
+              #2016s string - char
+              #4x pad bytes
+              if len(s) < 512:
+                  print "EOF"
+                  skip+=1
+                  continue
+              r = struct.unpack('>2H4s504s', s)
+              i1 = Image.frombytes('1', (64, 63), r[3], 'raw')
+              
+              if int(r[3]) != 0:
+                  if len(character) == 0:
+                      character.append(d[r[3]])
+                  elif len(character) == 1 and d[r[3]] != character[0]:
+                      character.append(d[r[3]])
+                  elif len(character) > 1 and d[r[3]] != character[-1]:
+                      character.append(d[r[3]])
+              else:
+                  skip += 1
+                  acc[5] += 1
+                  continue
+              #exclude some characters, unimportant to the dataset
+              if excludeChars(d[r[3]]):
+                  skip += 1
+                  continue
+              iF = Image.frombytes('F', (64, 63), r[18], 'bit', 4)
+              iP = iF.convert('P')
+              iT = iP.convert('RGB')
+              fn = "{:1d}{:4d}{:2x}.png".format(r[0], r[2], r[3])
+              #iP.save(fn, 'PNG', bits=4)
+              enhancer = ImageEnhance.Brightness(iP)
+              iE = enhancer.enhance(16)
+              path = os.path.join(destDir, "%d" % ord(d[r[3]].decode('utf-8')))
+              if not os.path.exists(path):
+                  print path
+                  os.makedirs(path)
+              acc[min(int(r[5]),5)] +=1
+              if r[5] == 0 and int(r[3]) != 0:               
+                  iE.save(os.path.join(path,fn), 'PNG')
+              skip += 1
+          for c in character:
+              print c
+          print "Quality assesment:"
+          character = []
+          print(acc)
 
 def Filter(image):
     image = cv2.medianBlur(image, 3)
     #image = cv2.medianBlur(image, 3)
-    image = cv2.GaussianBlur(image, (3,3), 5)
+    #image = cv2.GaussianBlur(image, (3,3), 5)
     #mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C,\
     #                                     cv2.THRESH_BINARY_INV, 7,-15)
     ret, mask = cv2.threshold(image, 0,255, cv2.THRESH_OTSU |
@@ -273,7 +271,7 @@ def Normalize(c, oSize):
                               left=xBorder, right=xBorder,\
                               borderType= cv2.BORDER_CONSTANT, value=[255,255,255] )
     c = cv2.resize(c,((dimx),(dimy)))
-    c = cv2.GaussianBlur(c,(3,3),0)
+    #c = cv2.GaussianBlur(c,(3,3),0)
     return c
 def preproc_ETL1(sourceDir, destDir, iSize, oSize):
     image_files = os.listdir(sourceDir)
@@ -382,7 +380,7 @@ def maybePickle(baseDir, dataPath, force=False):
         raise
     
 #unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
-unpack_ETL8B(ETL8path, os.path.join(ETL8path, "data"))
+#unpack_ETL8B(ETL8path, os.path.join(ETL8path, "data"))
 #cv2.namedWindow('display',cv2.WINDOW_NORMAL)
-#process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
+process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
 #maybePickle(dataRoot, os.path.join(dataRoot,"data"))
