@@ -73,13 +73,19 @@ def randomize(dataset, labels):
 #main aquire datasets
 dataRoot = "./datasets/"
 maybeDownload(dataRoot,"http://etlcdb.db.aist.go.jp/etlcdb/data/",\
-              [("ETL1.zip",105028771),("ETL6.zip",165893957)], )
+              [("ETL1.zip",105028771),("ETL8B.zip",27760622 )], )
 ETL1path = maybeExtract(dataRoot, "ETL1.zip")
-ETL6path = maybeExtract(dataRoot, "ETL6.zip")
+ETL6path = maybeExtract(dataRoot, "ETL8B.zip")
 
 
 #extract datasets
-
+def excludeChars(character):
+  character = character.decode('utf-8')
+  #definition of all excluded characters
+  s = u"・,␣’'.."
+  if s.find(character) != -1:
+    return True
+  return False
 def unpack_ETL1(sourceDir, destDir):
     d = JISX201Dict()
     onlyfiles = [f for f in os.listdir(sourceDir) if os.path.isfile(os.path.join(sourceDir, f)) and f.find("ETL") != -1]
@@ -110,6 +116,8 @@ def unpack_ETL1(sourceDir, destDir):
                     skip+=1
                     continue
                 r = struct.unpack('>H2sH6BI4H4B4x2016s4x', s)
+
+                
                 if int(r[3]) != 0:
                     if len(character) == 0:
                         character.append(d[r[3]])
@@ -120,6 +128,10 @@ def unpack_ETL1(sourceDir, destDir):
                 else:
                     skip += 1
                     acc[5] += 1
+                    continue
+                #exclude some characters, unimportant to the dataset
+                if excludeChars(d[r[3]]):
+                    skip += 1
                     continue
                 iF = Image.frombytes('F', (64, 63), r[18], 'bit', 4)
                 iP = iF.convert('P')
@@ -145,12 +157,14 @@ def unpack_ETL1(sourceDir, destDir):
 def Filter(image):
     image = cv2.medianBlur(image, 3)
     #image = cv2.medianBlur(image, 3)
-    image = cv2.GaussianBlur(image, (3,3), 10)
-    #unsharp = cv2.GaussianBlur(image, (9,9), 10.0)
-    #image = cv2.addWeighted(image,1.5,unsharp,-0.5,0,image)
-    mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C,\
-                                         cv2.THRESH_BINARY_INV, 13,-15)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+    image = cv2.GaussianBlur(image, (3,3), 5)
+    #mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C,\
+    #                                     cv2.THRESH_BINARY_INV, 7,-15)
+    ret, mask = cv2.threshold(image, 0,255, cv2.THRESH_OTSU |
+                                         cv2.THRESH_BINARY_INV)
+    #cv2.imshow('display', mask)
+    #cv2.waitKey(100)
+    #kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
     #mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel,1)
     return mask
     
@@ -301,6 +315,8 @@ def maybePickle(baseDir, dataPath, force=False):
         print('Unable to save data to', pickle_file, ':', e)
         raise
     
-#unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
-#process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
+unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
+      
+#cv2.namedWindow('display',cv2.WINDOW_NORMAL)
+process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
 maybePickle(dataRoot, os.path.join(dataRoot,"data"))
