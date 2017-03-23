@@ -78,7 +78,11 @@ def test_data_get(dataset, labelCount):
     for i in range(dataset['test_labels'].shape[0]):
        labels[i][charmap[dataset['test_labels'][i]]] = 1
     return data, labels
-
+def randomize(dataset, labels):
+    permutation = np.random.permutation(labels.shape[0])
+    shuffled_dataset = dataset[permutation,:,:]
+    shuffled_labels = labels[permutation]
+    return shuffled_dataset, shuffled_labels
 
 
 print('Training of M7.1 type neural network')
@@ -95,9 +99,11 @@ dataset['test_dataset'] = dataset['test_dataset'].astype(np.float32)
 print ("Training %d x %d images, %d labels" % (dimx, dimy, labelCount))
 print ("Training samples count - %d, test samples %d" % (trainSamples, testSamples))
 #training parameters
-batchSize = 100
-restoreModel = False
-nTrain = 20
+batchSize = 16
+restoreModel = True
+nTrain = 12
+logsPerEpoch = 2
+logNo = 5
 #declare variables and io data
 X = tf.placeholder(tf.float32, [None,75,75])
 phase_train = tf.placeholder(tf.bool, name='phase_train')
@@ -106,26 +112,34 @@ x_image = tf.expand_dims(X,3)#tf.reshape(Xf, [-1,75,75,1])
 #first convolution layer and pooling operation
 W_conv1 = weight_variable([3,3,1,64])
 b_conv1 = bias_variable([64])
-bn_conv1 = batch_norm(conv2d(x_image, W_conv1) + b_conv1,64, phase_train)
+bn_conv1 = batch_norm(conv2d(x_image, W_conv1) + b_conv1,64, phase_train,scope='bn1')
 h_conv1 = tf.nn.relu(bn_conv1)
+#pooling 1
 h_pool1 = max_pool_2x2(h_conv1)
 #second convolution layer
 W_conv2 = weight_variable([3,3,64,128])
 b_conv2 = bias_variable([128])
-bn_conv2 = batch_norm(conv2d(h_pool1, W_conv2) + b_conv2,128,phase_train)
+bn_conv2 = batch_norm(conv2d(h_pool1, W_conv2) + b_conv2,128,phase_train,scope='bn2')
 h_conv2 = tf.nn.relu(bn_conv2)
+#pooling 2
 h_pool2 = max_pool_2x2(h_conv2)
 #third convolution layer
 W_conv3 = weight_variable([3,3,128,512])
 b_conv3 = bias_variable([512])
-bn_conv3 = batch_norm(conv2d(h_pool2, W_conv3) + b_conv3,512,phase_train)
+bn_conv3 = batch_norm(conv2d(h_pool2, W_conv3) + b_conv3,512,phase_train,scope='bn3')
 h_conv3 = tf.nn.relu(bn_conv3)
-h_pool3 = max_pool_2x2(h_conv3)
+#fourth convolution layer
+W_conv4 = weight_variable([3,3,512,512])
+b_conv4 = bias_variable([512])
+bn_conv4 = batch_norm(conv2d(h_conv3, W_conv4) + b_conv4,512,phase_train,scope='bn4')
+h_conv4 = tf.nn.relu(bn_conv4)
+#pooling 3
+h_pool4 = max_pool_2x2(h_conv4)
 #initialize fully connected layer 1 and flatten it
 W_fc1 = weight_variable([10*10 * 512, 4096])
 b_fc1 = bias_variable([4096])
-h_pool3_flat = tf.reshape(h_pool3, [-1, 10*10*512])
-h_fc1 = tf.nn.relu(tf.matmul(h_pool3_flat, W_fc1) + b_fc1)
+h_pool4_flat = tf.reshape(h_pool4, [-1, 10*10*512])
+h_fc1 = tf.nn.relu(tf.matmul(h_pool4_flat, W_fc1) + b_fc1)
 # introduce dropout and keep rate svariable
 keep_prob = tf.placeholder(tf.float32)
 h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
@@ -156,18 +170,22 @@ init = tf.global_variables_initializer()
 
 sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
 sess.run(init)
+
 if restoreModel:
     print("Restoring state")
     model_saver.restore(sess, tf.train.latest_checkpoint('./'))
 plot_it = []
 plot_trainacc = []
+plot_testacc = []
+plot_ittrain = []
 #fig1 = plt.plot([],[])
-plt.axis([0, (trainSamples / batchSize) * nTrain,0.8,1])
+plt.axis([0, nTrain,0.8,1])
 plt.ion()
 plt.show()
 timeStart = time.time()
-for i in range((trainSamples / batchSize) * nTrain):
 
+nextLogs = 1#(trainSamples / batchSize) / logsPerEpoch
+for i in range((trainSamples / batchSize) * nTrain):
     #load and loop train images
     batch_X,  batch_Y = batch_train(currentIndex,batchSize,dataset, labelCount)
     if batch_X.shape[0] == 0:
@@ -180,37 +198,41 @@ for i in range((trainSamples / batchSize) * nTrain):
     sess.run(train_step, feed_dict=train_data)
     #calculate accuracy and cross enthropy for training data
     a,c = sess.run([accuracy,cross_entropy],feed_dict=train_data)
-
-    #fig1.set_xdata(numpy.array(plot_it,dtype=float32))
-    #fig1.set_ydata(numpy.array(plot_trainacc,dtype=int))
-    #assess performance on test data
-    if i%(100 / (batchSize / 100)) == 0:
+    nextLogs -= 1
+    #assess performance on test data every logNo part of train samples
+    if nextLogs == 0:
+        nextLogs = (trainSamples / batchSize) / logsPerEpoch
+        timeStop = time.time()
         #perform test on test dataset
         plt.pause(0.01)
         testA, testB = test_data_get(dataset, labelCount)
         resA = []
-        for j in range(len(testA) / 100):
-            chunkA = testA[100*j:100*(j+1)]
-            chunkB = testB[100*j:100*(j+1)]
+        for j in range(len(testA) / batchSize):
+            chunkA = testA[batchSize*j:batchSize*(j+1)]
+            chunkB = testB[batchSize*j:batchSize*(j+1)]
             a = accuracy.eval(feed_dict={X: chunkA, Y_: chunkB, keep_prob: 1.0, phase_train: False},session=sess)
             resA.append(a)
         a = 0
         for j in range(len(resA)):
             a += resA[j]
         a /= len(resA)
-        
-        #plot data
-
-        plot_trainacc.append(a)
-        plot_it.append(i)
-        plt.plot(plot_it,plot_trainacc)
+        plot_testacc.append(a)
+        plot_it.append(float(i) / float(trainSamples / batchSize))
+        plt.plot(plot_it,plot_testacc)
         print('accuracy: ',a)
-        timeStop = time.time()
-        print("Time elapsed: ", timeStop - timeStart)
-        timeStart = timeStop
-    if i %(2000 / (batchSize / 100)) == 0:
-        model_saver.save(sess, "CNN12.ckpt")
+        #calculate time metrics
+        dt = (timeStop - timeStart) / float(nextLogs)
+        print("Iteration time: ", dt)
+        epochNo = (1 + i / (trainSamples / batchSize))
+        leftEpoch =int( dt * ((trainSamples / batchSize) * epochNo - i)) / 60
+        leftTotal =int( dt * ((trainSamples / batchSize) * nTrain - i)) / 60
+        print ("Time left: %d minutes to save, %d minutes total (%d epochs left)" % (leftEpoch, leftTotal, nTrain - epochNo + 1))
+        timeStart = time.time()
+    #save exery epoch
+    if i % (trainSamples / batchSize) == 0 and i != 0:
         print("Saving state")
-    
-#optimize
-
+        model_saver.save(sess, "CNN12.ckpt")
+        print("Save Complete!")
+        #shuffle the dataset
+        dataset['train_dataset'], dataset['train_labels'] = randomize(dataset['train_dataset'], \
+                                                                      dataset['train_labels'])
