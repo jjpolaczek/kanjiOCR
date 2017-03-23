@@ -84,7 +84,7 @@ def test_data_get(dataset, labelCount):
 print('Training of M7.1 type neural network')
 
 #dataset parameters
-dataset = pickle.load(open("./data/ETL1.pickle", "rb"))
+dataset = pickle.load(open("./datasets/ETL.pickle", "rb"))
 dimx = 75
 dimy = 75
 labelCount = len(dataset['label_map'])
@@ -98,7 +98,7 @@ print (dataset['train_dataset'].dtype)
 #training parameters
 batchSize = 100
 restoreModel = False
-nTrain = 5
+nTrain = 20
 #declare variables and io data
 X = tf.placeholder(tf.float32, [None,75,75])
 phase_train = tf.placeholder(tf.bool, name='phase_train')
