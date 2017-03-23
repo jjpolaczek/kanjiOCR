@@ -260,7 +260,7 @@ def innerLabels(d):
     b = []
     #create mapping of folder int name in unicode to class count
     for it in d:
-        b.append((unichr(int(it[1])), cnt))
+        b.append((unichr(int(it)), cnt))
         cnt += 1
     return dict(b), cnt
 def maybePickle(baseDir, dataPath, force=False):
@@ -273,7 +273,6 @@ def maybePickle(baseDir, dataPath, force=False):
     train_labels = np.ndarray(shape =(0), dtype=np.unicode0)
     test_dataset = np.ndarray(shape=(0,75,75), dtype=np.uint8)
     test_labels = np.ndarray(shape =(0), dtype=np.unicode0)
-
     test_ratio = 0.05
     for f in letFolders:
         data = load_letter(os.path.join(dataPath, f),(63,64), (75,75))
@@ -315,8 +314,8 @@ def maybePickle(baseDir, dataPath, force=False):
         print('Unable to save data to', pickle_file, ':', e)
         raise
     
-unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
+#unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
       
 #cv2.namedWindow('display',cv2.WINDOW_NORMAL)
-process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
+#process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
 maybePickle(dataRoot, os.path.join(dataRoot,"data"))
