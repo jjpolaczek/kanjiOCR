@@ -94,7 +94,6 @@ dataset['train_dataset'] = dataset['train_dataset'].astype(np.float32)
 dataset['test_dataset'] = dataset['test_dataset'].astype(np.float32)
 print ("Training %d x %d images, %d labels" % (dimx, dimy, labelCount))
 print ("Training samples count - %d, test samples %d" % (trainSamples, testSamples))
-print (dataset['train_dataset'].dtype)
 #training parameters
 batchSize = 100
 restoreModel = False
@@ -158,8 +157,8 @@ init = tf.global_variables_initializer()
 sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
 sess.run(init)
 if restoreModel:
-    model_saver.restore(sess, "CNN12.ckpt")
     print("Restoring state")
+    model_saver.restore(sess, tf.train.latest_checkpoint('./'))
 plot_it = []
 plot_trainacc = []
 #fig1 = plt.plot([],[])
@@ -176,7 +175,7 @@ for i in range((trainSamples / batchSize) * nTrain):
         batch_X,  batch_Y = batch_train(currentIndex,batchSize,dataset, labelCount)
     currentIndex += batch_X.shape[0]
     #load train images and labelsinto tf session
-    train_data={X: batch_X, Y_: batch_Y, keep_prob: 0.5, phase_train: True}
+    train_data={X: batch_X, Y_: batch_Y, keep_prob: 0.8, phase_train: True}
     #run optimizer defined previously on training data
     sess.run(train_step, feed_dict=train_data)
     #calculate accuracy and cross enthropy for training data
