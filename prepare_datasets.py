@@ -10,8 +10,11 @@ from PIL import Image, ImageEnhance, ImageOps
 from scipy import ndimage
 from six.moves.urllib.request import urlretrieve
 from six.moves import cPickle as pickle
+
+from JISX0208 import JISX0208Dict 
 from JISX201 import JISX201Dict
 import cv2
+import re
 
 last_percent_reported = None
 def download_progress_hook(count, blockSize, totalSize):
@@ -153,8 +156,11 @@ def unpack_ETL1(sourceDir, destDir):
             print "Quality assesment:"
             character = []
             print(acc)
+
 def unpack_ETL8B(sourceDir, destDir):
+    d = JISX0208Dict()
     onlyfiles = [f for f in os.listdir(sourceDir) if os.path.isfile(os.path.join(sourceDir, f)) and f.find("ETL8B2") != -1]
+    count = 0
     for filename in onlyfiles:
       print ("Unpacking" + filename)
       with open(os.path.join(sourceDir,filename), 'r') as f:
@@ -167,57 +173,28 @@ def unpack_ETL8B(sourceDir, destDir):
               s = f.read(512)
               if s is None or len(s) == 0:
                   break
-              #H - unsigned shord
-              #2s - ss -char char
-              #H - insigned short
-              #6B - unsigned char
-              #I uint
-              #4H ushort
-              #4B uchar
-              #4x pas bytes
-              #2016s string - char
-              #4x pad bytes
+              #2H - unsigned shord sheet no > JIS code
+              #4s - char reading
+              #504s data string
               if len(s) < 512:
                   print "EOF"
                   skip+=1
                   continue
               r = struct.unpack('>2H4s504s', s)
               i1 = Image.frombytes('1', (64, 63), r[3], 'raw')
-              
-              if int(r[3]) != 0:
-                  if len(character) == 0:
-                      character.append(d[r[3]])
-                  elif len(character) == 1 and d[r[3]] != character[0]:
-                      character.append(d[r[3]])
-                  elif len(character) > 1 and d[r[3]] != character[-1]:
-                      character.append(d[r[3]])
-              else:
-                  skip += 1
-                  acc[5] += 1
-                  continue
-              #exclude some characters, unimportant to the dataset
-              if excludeChars(d[r[3]]):
-                  skip += 1
-                  continue
-              iF = Image.frombytes('F', (64, 63), r[18], 'bit', 4)
-              iP = iF.convert('P')
-              iT = iP.convert('RGB')
-              fn = "{:1d}{:4d}{:2x}.png".format(r[0], r[2], r[3])
-              #iP.save(fn, 'PNG', bits=4)
-              enhancer = ImageEnhance.Brightness(iP)
-              iE = enhancer.enhance(16)
-              path = os.path.join(destDir, "%d" % ord(d[r[3]].decode('utf-8')))
+              fn = 'ETL8B2_{:d}_{:s}.png'.format(count, hex(r[1])[-4:])
+              iI = Image.eval(i1, lambda x: not x)
+              path = os.path.join(destDir, "%d" % ord(d[r[1]].decode('utf-8')))
               if not os.path.exists(path):
                   print path
                   os.makedirs(path)
-              acc[min(int(r[5]),5)] +=1
-              if r[5] == 0 and int(r[3]) != 0:               
-                  iE.save(os.path.join(path,fn), 'PNG')
-              skip += 1
-          for c in character:
-              print c
+              iI.save(os.path.join(path,fn), 'PNG')
+              acc[0] += 1
+              count += 1
+              c = d[r[1]]
+              #print c
+              skip +=1
           print "Quality assesment:"
-          character = []
           print(acc)
 
 def Filter(image):
@@ -234,12 +211,14 @@ def Filter(image):
     #mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel,1)
     return mask
     
-def Normalize(c, oSize):
+def Normalize(c, oSize, invert=False):
     #center and scale letter to 75x75 pix (~ETL datasets)
     dimx = oSize[0]
     dimy = oSize[1]
     #getbounding box of the fragment
-    invImg = np.invert(c)
+    invImg = c
+    if invert:
+      invImg = np.invert(c)
     xsum = invImg.sum(0)
     ysum = invImg.sum(1)
     xBlack = np.asarray(np.where(xsum != 0))
@@ -279,13 +258,23 @@ def preproc_ETL1(sourceDir, destDir, iSize, oSize):
         image_file = os.path.join(sourceDir, image)
         tmpImg = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
         tmpImg = Filter(tmpImg)
-        tmpImg = Normalize(tmpImg, oSize)
+        tmpImg = Normalize(tmpImg, oSize, invert=True)
         if tmpImg == None:
             print "Invalid element %s" % (image)
             continue
         
         cv2.imwrite(os.path.join(destDir,image),tmpImg)
-    
+def preproc_ETL8(sourceDir, destDir, iSize, oSize):
+    image_files = os.listdir(sourceDir)
+    for image in image_files:
+        image_file = os.path.join(sourceDir, image)
+        tmpImg = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
+        tmpImg = Normalize(tmpImg, oSize)
+        if tmpImg == None:
+            print "Invalid element %s" % (image)
+            continue
+        
+        cv2.imwrite(os.path.join(destDir,image),tmpImg)    
 def load_letter(folder, iSize, oSize):
     image_files = os.listdir(folder)
     dataset = np.ndarray(shape=(len(image_files), oSize[0], oSize[1]),
@@ -318,7 +307,15 @@ def process_ETL1(sourceDir, destDir):
         data = preproc_ETL1(os.path.join(sourceDir,f), \
                                os.path.join(destDir,f),(63,64), (75,75))
         
-
+def process_ETL8(sourceDir, destDir):
+    letFolders = [f for f in os.listdir(sourceDir) if os.path.isfile(os.path.join(sourceDir,f)) == False]
+    for f in letFolders:
+        destPath = os.path.join(destDir,f)
+        if not os.path.exists(destPath):
+            print destPath
+            os.makedirs(destPath)
+        data = preproc_ETL8(os.path.join(sourceDir,f), \
+                               os.path.join(destDir,f),(63,64), (75,75))
         
 def innerLabels(d):
     d = sorted(d)
@@ -335,6 +332,8 @@ def maybePickle(baseDir, dataPath, force=False):
     labels, labelcount = innerLabels(letFolders)
     #We pack data into two datasets - validation and training
     # each letter has a label
+    totalLet = len(letFolders)
+    currentLet = 1
     train_dataset = np.ndarray(shape=(0,75,75), dtype=np.uint8)
     train_labels = np.ndarray(shape =(0), dtype=np.unicode0)
     test_dataset = np.ndarray(shape=(0,75,75), dtype=np.uint8)
@@ -344,7 +343,7 @@ def maybePickle(baseDir, dataPath, force=False):
         data = load_letter(os.path.join(dataPath, f),(63,64), (75,75))
         if data != None:
             print u"%s" % (unichr(int(f)))
-            print("Letter",  unichr(int(f)),f)
+            print("Letter %d/%d" % (currentLet,totalLet),  unichr(int(f)),f)
             setSize = data.shape[0]
             testCount = int(setSize * test_ratio)
             trainCount= setSize - testCount
@@ -352,6 +351,7 @@ def maybePickle(baseDir, dataPath, force=False):
             train_labels = np.hstack((train_labels, np.array((trainCount - 1)*[unichr(int(f))])))
             test_dataset = np.vstack((test_dataset, data[trainCount:setSize,:,:]))
             test_labels = np.hstack((test_labels, np.array(testCount*[unichr(int(f))])))
+            currentLet += 1
         else:
             print ("No such letter", unichr(int(f)))
             
@@ -380,7 +380,8 @@ def maybePickle(baseDir, dataPath, force=False):
         raise
     
 #unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
-#unpack_ETL8B(ETL8path, os.path.join(ETL8path, "data"))
+unpack_ETL8B(ETL8path, os.path.join(ETL8path, "data"))
 #cv2.namedWindow('display',cv2.WINDOW_NORMAL)
 #process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
+process_ETL8(os.path.join(ETL8path, "data"), os.path.join(dataRoot,"data"))
 maybePickle(dataRoot, os.path.join(dataRoot,"data"))

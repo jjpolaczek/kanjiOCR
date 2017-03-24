@@ -1,5 +1,4 @@
-﻿
-
+# -*- coding: utf8 -*-
 def JISX201Dict():
     d = dict()
     d[32] = ' '

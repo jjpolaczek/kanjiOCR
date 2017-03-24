@@ -100,7 +100,8 @@ print ("Training %d x %d images, %d labels" % (dimx, dimy, labelCount))
 print ("Training samples count - %d, test samples %d" % (trainSamples, testSamples))
 #training parameters
 batchSize = 16
-restoreModel = True
+restoreModel = False
+saveName = "CNNall.ckpt"
 nTrain = 12
 logsPerEpoch = 2
 logNo = 5
@@ -179,7 +180,7 @@ plot_trainacc = []
 plot_testacc = []
 plot_ittrain = []
 #fig1 = plt.plot([],[])
-plt.axis([0, nTrain,0.8,1])
+plt.axis([0, nTrain,0.0,1])
 plt.ion()
 plt.show()
 timeStart = time.time()
@@ -231,7 +232,7 @@ for i in range((trainSamples / batchSize) * nTrain):
     #save exery epoch
     if i % (trainSamples / batchSize) == 0 and i != 0:
         print("Saving state")
-        model_saver.save(sess, "CNN12.ckpt")
+        model_saver.save(sess, saveName)
         print("Save Complete!")
         #shuffle the dataset
         dataset['train_dataset'], dataset['train_labels'] = randomize(dataset['train_dataset'], \
