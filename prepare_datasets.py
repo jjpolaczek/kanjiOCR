@@ -10,7 +10,7 @@ from PIL import Image, ImageEnhance, ImageOps
 from scipy import ndimage
 from six.moves.urllib.request import urlretrieve
 from six.moves import cPickle as pickle
-
+import random
 from JISX0208 import JISX0208Dict 
 from JISX201 import JISX201Dict
 import cv2
@@ -84,11 +84,27 @@ ETL8path = maybeExtract(dataRoot, "ETL8B.zip")
 #extract datasets
 def excludeChars(character):
   character = character.decode('utf-8')
+  no = ord(character)
   #definition of all excluded characters
-  s = u"・,␣’'.."
+
+  #Accept alfanumeric
+  s = u"ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+  s += s.lower()
   if s.find(character) != -1:
-    return True
-  return False
+    return False
+  #accept hiragana and katakana
+  #s = u"ぁあぃいぅうぇえぉおかがきぎく
+  if no >= 0x3040 and no <= 0x309f:
+    return False #hiragana range
+  if no >= 0x30a0 and no <= 0x30ff:
+    return False #katakana range
+  if no >= 0xff60 and no <= 0xff9f:
+    return False #katakana halfwidth range
+  acceptedKanji = u"雨父休左友読火右母天白毎万車南何食聞木土語校電西男水半千川名先書百午北女話山"
+  acceptedKanji += u"小気来下八六子外円高学入九金今四東上間五生前後月見行時三出長中本二十大年人国一日"
+  if acceptedKanji.find(character) != -1:
+    return False
+  return True
 def unpack_ETL1(sourceDir, destDir):
     d = JISX201Dict()
     onlyfiles = [f for f in os.listdir(sourceDir) if os.path.isfile(os.path.join(sourceDir, f)) and f.find("ETL1C") != -1]
@@ -156,7 +172,7 @@ def unpack_ETL1(sourceDir, destDir):
             print "Quality assesment:"
             character = []
             print(acc)
-
+            
 def unpack_ETL8B(sourceDir, destDir):
     d = JISX0208Dict()
     onlyfiles = [f for f in os.listdir(sourceDir) if os.path.isfile(os.path.join(sourceDir, f)) and f.find("ETL8B2") != -1]
@@ -181,6 +197,10 @@ def unpack_ETL8B(sourceDir, destDir):
                   skip+=1
                   continue
               r = struct.unpack('>2H4s504s', s)
+              if excludeChars(d[r[1]]):
+                skip += 1
+                acc[4] += 1
+                continue
               i1 = Image.frombytes('1', (64, 63), r[3], 'raw')
               fn = 'ETL8B2_{:d}_{:s}.png'.format(count, hex(r[1])[-4:])
               iI = Image.eval(i1, lambda x: not x)
@@ -252,6 +272,50 @@ def Normalize(c, oSize, invert=False):
     c = cv2.resize(c,((dimx),(dimy)))
     #c = cv2.GaussianBlur(c,(3,3),0)
     return c
+  
+# function from https://github.com/vxy10/ImageAugmentation/ - all credit to the author
+def transformImage(img,ang_range,shear_range,trans_range):
+    img = cv2.bitwise_not(img)
+    '''
+    This function transforms images to generate new images.
+    The function takes in following arguments,
+    1- Image
+    2- ang_range: Range of angles for rotation
+    3- shear_range: Range of values to apply affine transform to
+    4- trans_range: Range of values to apply translations over. 
+    
+    A Random uniform distribution is used to generate different parameters for transformation
+    
+    '''
+    # Rotation
+
+    ang_rot = np.random.uniform(ang_range)-ang_range/2
+    rows,cols = img.shape    
+    Rot_M = cv2.getRotationMatrix2D((cols/2,rows/2),ang_rot,1)
+
+    # Translation
+    tr_x = trans_range*np.random.uniform()-trans_range/2
+    tr_y = trans_range*np.random.uniform()-trans_range/2
+    Trans_M = np.float32([[1,0,tr_x],[0,1,tr_y]])
+
+    # Shear
+    pts1 = np.float32([[5,5],[20,5],[5,20]])
+
+    pt1 = 5+shear_range*np.random.uniform()-shear_range/2
+    pt2 = 20+shear_range*np.random.uniform()-shear_range/2
+    
+    # Brightness 
+    pts2 = np.float32([[pt1,5],[pt2,pt1],[5,pt2]])
+
+    shear_M = cv2.getAffineTransform(pts1,pts2)
+        
+    img = cv2.warpAffine(img,Rot_M,(cols,rows))
+    img = cv2.warpAffine(img,Trans_M,(cols,rows))
+    img = cv2.warpAffine(img,shear_M,(cols,rows))
+    
+    #img = augment_brightness_camera_images(img)
+    img = cv2.bitwise_not(img)
+    return img
 def preproc_ETL1(sourceDir, destDir, iSize, oSize):
     image_files = os.listdir(sourceDir)
     for image in image_files:
@@ -326,7 +390,23 @@ def innerLabels(d):
         b.append((unichr(int(it)), cnt))
         cnt += 1
     return dict(b), cnt
-def maybePickle(baseDir, dataPath, force=False):
+def augmentSet(data, minSamples):
+  sourceCount = data.shape[0]
+  if sourceCount >= minSamples:
+    return data
+  imgLeft = minSamples - sourceCount
+  index = 0
+  print ("Generating additional %d samples from %d images"%(imgLeft, sourceCount))
+  artificialSet = np.ndarray(shape=(imgLeft,data.shape[1],data.shape[2]), dtype=np.uint8)
+  if imgLeft > 0:
+    while imgLeft > 0:
+      sourceIndex = random.randint(0, sourceCount - 1)
+      artificialSet[index,:,:] = transformImage(data[sourceIndex,:,:],10,4,3)
+      cv2.imwrite("test/%d.png"%(random.randint(0,56666)),artificialSet[index,:,:])
+      index += 1
+      imgLeft -= 1
+  return np.vstack((data,artificialSet))
+def maybePickle(baseDir, dataPath, force=False, minSamples=1200):
     letFolders = [f for f in os.listdir(dataPath) if os.path.isfile(os.path.join(dataPath,f)) == False]
     #find unique enumeration for data labels -dictionary map of unicode - int
     labels, labelcount = innerLabels(letFolders)
@@ -344,6 +424,7 @@ def maybePickle(baseDir, dataPath, force=False):
         if data != None:
             print u"%s" % (unichr(int(f)))
             print("Letter %d/%d" % (currentLet,totalLet),  unichr(int(f)),f)
+            data = augmentSet(data, minSamples)
             setSize = data.shape[0]
             testCount = int(setSize * test_ratio)
             trainCount= setSize - testCount
@@ -380,8 +461,8 @@ def maybePickle(baseDir, dataPath, force=False):
         raise
     
 #unpack_ETL1(ETL1path, os.path.join(ETL1path, "data"))
-unpack_ETL8B(ETL8path, os.path.join(ETL8path, "data"))
+#unpack_ETL8B(ETL8path, os.path.join(ETL8path, "data"))
 #cv2.namedWindow('display',cv2.WINDOW_NORMAL)
 #process_ETL1(os.path.join(ETL1path, "data"), os.path.join(dataRoot,"data"))
-process_ETL8(os.path.join(ETL8path, "data"), os.path.join(dataRoot,"data"))
+#process_ETL8(os.path.join(ETL8path, "data"), os.path.join(dataRoot,"data"))
 maybePickle(dataRoot, os.path.join(dataRoot,"data"))
