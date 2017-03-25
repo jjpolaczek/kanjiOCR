@@ -17,12 +17,12 @@ import time
 
 
 #definitions from TF tutorial making code cleaner or sth
-def weight_variable(shape):
+def weight_variable(shape, vname):
     initial= tf.truncated_normal(shape, stddev=0.1)
-    return tf.Variable(initial)
-def bias_variable(shape):
+    return tf.Variable(initial, name=vname)
+def bias_variable(shape,vname):
     initial = tf.constant(0.1, shape=shape)
-    return tf.Variable(initial)
+    return tf.Variable(initial, name=vname)
 def conv2d(x, W):
     return tf.nn.conv2d(x, W, strides = [1,1,1,1], padding='SAME')
 
@@ -88,7 +88,9 @@ def randomize(dataset, labels):
 print('Training of M7.1 type neural network')
 
 #dataset parameters
+print ("Loading Dataset")
 dataset = pickle.load(open("./datasets/ETL.pickle", "rb"))
+print ("Load Complete")
 dimx = 75
 dimy = 75
 labelCount = len(dataset['label_map'])
@@ -102,7 +104,7 @@ print ("Training samples count - %d, test samples %d" % (trainSamples, testSampl
 batchSize = 16
 restoreModel = False
 saveName = "CNNall.ckpt"
-nTrain = 12
+nTrain = 36
 logsPerEpoch = 2
 logNo = 5
 #declare variables and io data
@@ -111,51 +113,55 @@ phase_train = tf.placeholder(tf.bool, name='phase_train')
 #Xf = tf.reshape(X,[-1,75*75])
 x_image = tf.expand_dims(X,3)#tf.reshape(Xf, [-1,75,75,1])
 #first convolution layer and pooling operation
-W_conv1 = weight_variable([3,3,1,64])
-b_conv1 = bias_variable([64])
+W_conv1 = weight_variable([3,3,1,64], 'W_conv1')
+b_conv1 = bias_variable([64], 'b_conv1')
 bn_conv1 = batch_norm(conv2d(x_image, W_conv1) + b_conv1,64, phase_train,scope='bn1')
 h_conv1 = tf.nn.relu(bn_conv1)
 #pooling 1
 h_pool1 = max_pool_2x2(h_conv1)
 #second convolution layer
-W_conv2 = weight_variable([3,3,64,128])
-b_conv2 = bias_variable([128])
+W_conv2 = weight_variable([3,3,64,128],'W_conv2')
+b_conv2 = bias_variable([128],'b_conv2')
 bn_conv2 = batch_norm(conv2d(h_pool1, W_conv2) + b_conv2,128,phase_train,scope='bn2')
 h_conv2 = tf.nn.relu(bn_conv2)
 #pooling 2
 h_pool2 = max_pool_2x2(h_conv2)
 #third convolution layer
-W_conv3 = weight_variable([3,3,128,512])
-b_conv3 = bias_variable([512])
+W_conv3 = weight_variable([3,3,128,512],'W_conv3')
+b_conv3 = bias_variable([512],'b_conv3')
 bn_conv3 = batch_norm(conv2d(h_pool2, W_conv3) + b_conv3,512,phase_train,scope='bn3')
 h_conv3 = tf.nn.relu(bn_conv3)
 #fourth convolution layer
-W_conv4 = weight_variable([3,3,512,512])
-b_conv4 = bias_variable([512])
+W_conv4 = weight_variable([3,3,512,512],'W_conv4')
+b_conv4 = bias_variable([512],'b_conv4')
 bn_conv4 = batch_norm(conv2d(h_conv3, W_conv4) + b_conv4,512,phase_train,scope='bn4')
 h_conv4 = tf.nn.relu(bn_conv4)
 #pooling 3
 h_pool4 = max_pool_2x2(h_conv4)
 #initialize fully connected layer 1 and flatten it
-W_fc1 = weight_variable([10*10 * 512, 4096])
-b_fc1 = bias_variable([4096])
+W_fc1 = weight_variable([10*10 * 512, 4096],'W_fc1')
+b_fc1 = bias_variable([4096],'b_fc1')
 h_pool4_flat = tf.reshape(h_pool4, [-1, 10*10*512])
 h_fc1 = tf.nn.relu(tf.matmul(h_pool4_flat, W_fc1) + b_fc1)
 # introduce dropout and keep rate svariable
 keep_prob = tf.placeholder(tf.float32)
 h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 #fully connected layer 2
-W_fc2 = weight_variable([4096, 4096])
-b_fc2 = bias_variable([4096])
+W_fc2 = weight_variable([4096, 4096],'W_fc2')
+b_fc2 = bias_variable([4096],'b_fc2')
 h_fc2 = tf.nn.relu(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 h_fc2_drop = tf.nn.dropout(h_fc2, keep_prob)
 #Readout layer
-W_fc3 = weight_variable([4096,labelCount])
-b_fc3 = bias_variable([labelCount])
+W_fc3 = weight_variable([4096,labelCount],'W_fc3')
+b_fc3 = bias_variable([labelCount],'b_fc3')
 
 Y = tf.matmul(h_fc2_drop, W_fc3) + b_fc3
 
 model_saver = tf.train.Saver()
+#net_saver = tf.train.Saver({'W_conv1':W_conv1,'W_conv2':W_conv2,'W_conv3':W_conv3\
+#                            ,'W_conv4':W_conv4,'b_conv1':b_conv1,'b_conv2':b_conv2\
+#                            ,'b_conv3':b_conv3,'b_conv4':b_conv4,'W_fc1':W_fc1\
+#                            ,'W_fc2':W_fc2,'bn1/beta':W_fc3})
 
 Y_ = tf.placeholder(tf.float32, [None, labelCount])
 #must write one hot encoded values to Y_
@@ -184,10 +190,12 @@ plt.axis([0, nTrain,0.0,1])
 plt.ion()
 plt.show()
 timeStart = time.time()
-
-nextLogs = 1#(trainSamples / batchSize) / logsPerEpoch
+reloadLogVal = (trainSamples / batchSize) / logsPerEpoch
+nextLogs = reloadLogVal
 for i in range((trainSamples / batchSize) * nTrain):
     #load and loop train images
+    if i%100 == 0:
+        print("%d/%d" % (reloadLogVal - nextLogs,reloadLogVal))
     batch_X,  batch_Y = batch_train(currentIndex,batchSize,dataset, labelCount)
     if batch_X.shape[0] == 0:
         currentIndex = 0
@@ -202,7 +210,7 @@ for i in range((trainSamples / batchSize) * nTrain):
     nextLogs -= 1
     #assess performance on test data every logNo part of train samples
     if nextLogs == 0:
-        nextLogs = (trainSamples / batchSize) / logsPerEpoch
+        nextLogs = reloadLogVal
         timeStop = time.time()
         #perform test on test dataset
         plt.pause(0.01)
