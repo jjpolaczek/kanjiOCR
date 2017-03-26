@@ -14,6 +14,7 @@ from six.moves import cPickle as pickle
 
 import time
 
+import cv2
 
 
 #definitions from TF tutorial making code cleaner or sth
@@ -83,8 +84,15 @@ def randomize(dataset, labels):
     shuffled_dataset = dataset[permutation,:,:]
     shuffled_labels = labels[permutation]
     return shuffled_dataset, shuffled_labels
-
-
+def browse(dataset, labels, dictionary):
+    cv2.namedWindow('display',cv2.WINDOW_NORMAL)
+    for i in range(len(dataset)):
+        cv2.imshow('display',dataset[i,:,:])
+        #print ((dataset[i,:,:].astype('float32')/255.0))
+        print (labels[i])
+        print (dataset.dtype)
+        cv2.waitKey(5000)
+        
 print('Training of M7.1 type neural network')
 
 #dataset parameters
@@ -96,8 +104,9 @@ dimy = 75
 labelCount = len(dataset['label_map'])
 trainSamples = dataset['train_labels'].shape[0]
 testSamples = dataset['test_labels'].shape[0]
-dataset['train_dataset'] = dataset['train_dataset'].astype(np.float32)
-dataset['test_dataset'] = dataset['test_dataset'].astype(np.float32)
+dataset['train_dataset'] = dataset['train_dataset'].astype(np.float32) / 255.0
+dataset['test_dataset'] = dataset['test_dataset'].astype(np.float32) / 255.0
+#browse(dataset['train_dataset'],dataset['train_labels'],dataset['label_map'])
 print ("Training %d x %d images, %d labels" % (dimx, dimy, labelCount))
 print ("Training samples count - %d, test samples %d" % (trainSamples, testSamples))
 #training parameters
@@ -194,15 +203,15 @@ reloadLogVal = (trainSamples / batchSize) / logsPerEpoch
 nextLogs = reloadLogVal
 for i in range((trainSamples / batchSize) * nTrain):
     #load and loop train images
-    if i%100 == 0:
-        print("%d/%d" % (reloadLogVal - nextLogs,reloadLogVal))
+    #if i%100 == 0:
+    #   print("%d/%d" % (reloadLogVal - nextLogs,reloadLogVal))
     batch_X,  batch_Y = batch_train(currentIndex,batchSize,dataset, labelCount)
     if batch_X.shape[0] == 0:
         currentIndex = 0
         batch_X,  batch_Y = batch_train(currentIndex,batchSize,dataset, labelCount)
     currentIndex += batch_X.shape[0]
     #load train images and labelsinto tf session
-    train_data={X: batch_X, Y_: batch_Y, keep_prob: 0.8, phase_train: True}
+    train_data={X: batch_X, Y_: batch_Y, keep_prob: 1.0, phase_train: True}
     #run optimizer defined previously on training data
     sess.run(train_step, feed_dict=train_data)
     #calculate accuracy and cross enthropy for training data
@@ -235,6 +244,8 @@ for i in range((trainSamples / batchSize) * nTrain):
         epochNo = (1 + i / (trainSamples / batchSize))
         leftEpoch =int( dt * ((trainSamples / batchSize) * epochNo - i)) / 60
         leftTotal =int( dt * ((trainSamples / batchSize) * nTrain - i)) / 60
+        if leftEpoch ==0:
+            leftEpoch = (dt * (trainSamples / batchSize)) / 60
         print ("Time left: %d minutes to save, %d minutes total (%d epochs left)" % (leftEpoch, leftTotal, nTrain - epochNo + 1))
         timeStart = time.time()
     #save exery epoch
@@ -243,5 +254,5 @@ for i in range((trainSamples / batchSize) * nTrain):
         model_saver.save(sess, saveName)
         print("Save Complete!")
         #shuffle the dataset
-        dataset['train_dataset'], dataset['train_labels'] = randomize(dataset['train_dataset'], \
-                                                                      dataset['train_labels'])
+        #dataset['train_dataset'], dataset['train_labels'] = randomize(dataset['train_dataset'], \
+                                                                     # dataset['train_labels'])
