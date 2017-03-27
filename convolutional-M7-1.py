@@ -1,5 +1,4 @@
-# These are all the modules we'll be using later. Make sure you can import them
-# before proceeding further.
+# -*- coding: utf-8 -*-
 from __future__ import print_function
 import matplotlib.pyplot as plt
 import numpy as np
@@ -92,7 +91,29 @@ def browse(dataset, labels, dictionary):
         print (labels[i])
         print (dataset.dtype)
         cv2.waitKey(5000)
-        
+# Print iterations progress
+# Print iterations progress
+def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, bar_length=100):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        bar_length  - Optional  : character length of bar (Int)
+    """
+    str_format = "{0:." + str(decimals) + "f}"
+    percents = str_format.format(100 * (iteration / float(total)))
+    filled_length = int(round(bar_length * iteration / float(total)))
+    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+
+    sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
+
+    if iteration == total:
+        sys.stdout.write('\n')
+sys.stdout.flush()      
 print('Training of M7.1 type neural network')
 
 #dataset parameters
@@ -111,11 +132,24 @@ print ("Training %d x %d images, %d labels" % (dimx, dimy, labelCount))
 print ("Training samples count - %d, test samples %d" % (trainSamples, testSamples))
 #training parameters
 batchSize = 16
-restoreModel = False
+restoreModel = True
+generateModel = True
+saveDictionary = True
+dictPath = "log/dict.pickle"
 saveName = "CNNall.ckpt"
-nTrain = 36
+nTrain = 35
 logsPerEpoch = 2
 logNo = 5
+if saveDictionary:
+    try:
+        f = open(dictPath, 'wb')
+        invDic ={v: k for k, v in dataset['label_map'].iteritems()}
+        #TODO - save also unicode TLB int - unicode dictionary for dataset
+        pickle.dump(invDic, f, pickle.HIGHEST_PROTOCOL)
+        f.close()
+    except Exception as e:
+        print('Unable to save data to', pickle_file, ':', e)
+        raise
 #declare variables and io data
 X = tf.placeholder(tf.float32, [None,75,75])
 phase_train = tf.placeholder(tf.bool, name='phase_train')
@@ -167,10 +201,29 @@ b_fc3 = bias_variable([labelCount],'b_fc3')
 Y = tf.matmul(h_fc2_drop, W_fc3) + b_fc3
 
 model_saver = tf.train.Saver()
-#net_saver = tf.train.Saver({'W_conv1':W_conv1,'W_conv2':W_conv2,'W_conv3':W_conv3\
-#                            ,'W_conv4':W_conv4,'b_conv1':b_conv1,'b_conv2':b_conv2\
-#                            ,'b_conv3':b_conv3,'b_conv4':b_conv4,'W_fc1':W_fc1\
-#                            ,'W_fc2':W_fc2,'bn1/beta':W_fc3})
+net_saver = tf.train.Saver({'W_conv1':W_conv1,'W_conv2':W_conv2,'W_conv3':W_conv3\
+                            ,'W_conv4':W_conv4,'b_conv1':b_conv1,'b_conv2':b_conv2\
+                            ,'b_conv3':b_conv3,'b_conv4':b_conv4,'W_fc1':W_fc1\
+                            ,'W_fc2':W_fc2,'W_fc3':W_fc3,'b_fc1':b_fc1\
+                            ,'b_fc2':b_fc2,'b_fc3':b_fc3\
+                            ,'bn1/beta':[var for var in tf.global_variables() if var.op.name=="bn1/beta"][0]\
+                            ,'bn2/beta':[var for var in tf.global_variables() if var.op.name=="bn2/beta"][0]\
+                            ,'bn3/beta':[var for var in tf.global_variables() if var.op.name=="bn3/beta"][0]\
+                            ,'bn4/beta':[var for var in tf.global_variables() if var.op.name=="bn4/beta"][0]\
+                            ,'bn1/gamma':[var for var in tf.global_variables() if var.op.name=="bn1/gamma"][0]\
+                            ,'bn2/gamma':[var for var in tf.global_variables() if var.op.name=="bn2/gamma"][0]\
+                            ,'bn3/gamma':[var for var in tf.global_variables() if var.op.name=="bn3/gamma"][0]\
+                            ,'bn4/gamma':[var for var in tf.global_variables() if var.op.name=="bn4/gamma"][0]\
+                            
+                            ,'bn1/bn1/moments/moments_1/mean/ExponentialMovingAverage':[var for var in tf.global_variables() if var.op.name=="bn1/bn1/moments/moments_1/mean/ExponentialMovingAverage"][0]\
+                            ,'bn1/bn1/moments/moments_1/variance/ExponentialMovingAverage':[var for var in tf.global_variables() if var.op.name=="bn1/bn1/moments/moments_1/variance/ExponentialMovingAverage"][0]\
+                            ,'bn2/bn2/moments/moments_1/mean/ExponentialMovingAverage':[var for var in tf.global_variables() if var.op.name=="bn2/bn2/moments/moments_1/mean/ExponentialMovingAverage"][0]\
+                            ,'bn2/bn2/moments/moments_1/variance/ExponentialMovingAverage':[var for var in tf.global_variables() if var.op.name=="bn2/bn2/moments/moments_1/variance/ExponentialMovingAverage"][0]\
+                            ,'bn3/bn3/moments/moments_1/mean/ExponentialMovingAverage':[var for var in tf.global_variables() if var.op.name=="bn3/bn3/moments/moments_1/mean/ExponentialMovingAverage"][0]\
+                            ,'bn3/bn3/moments/moments_1/variance/ExponentialMovingAverage':[var for var in tf.global_variables() if var.op.name=="bn3/bn3/moments/moments_1/variance/ExponentialMovingAverage"][0]\
+                            ,'bn4/bn4/moments/moments_1/variance/ExponentialMovingAverage':[var for var in tf.global_variables() if var.op.name=="bn4/bn4/moments/moments_1/variance/ExponentialMovingAverage"][0]\
+                            ,'bn4/bn4/moments/moments_1/mean/ExponentialMovingAverage':[var for var in tf.global_variables() if var.op.name=="bn4/bn4/moments/moments_1/mean/ExponentialMovingAverage"][0]\
+                            })
 
 Y_ = tf.placeholder(tf.float32, [None, labelCount])
 #must write one hot encoded values to Y_
@@ -190,6 +243,10 @@ sess.run(init)
 if restoreModel:
     print("Restoring state")
     model_saver.restore(sess, tf.train.latest_checkpoint('./'))
+    print("Restore Complete")
+if generateModel:
+    net_saver.save(sess, "log/model.ckpt")
+    sys.exit()
 plot_it = []
 plot_trainacc = []
 plot_testacc = []
@@ -203,15 +260,14 @@ reloadLogVal = (trainSamples / batchSize) / logsPerEpoch
 nextLogs = reloadLogVal
 for i in range((trainSamples / batchSize) * nTrain):
     #load and loop train images
-    #if i%100 == 0:
-    #   print("%d/%d" % (reloadLogVal - nextLogs,reloadLogVal))
+    printProgressBar(reloadLogVal - nextLogs, reloadLogVal , prefix = 'Batch:', suffix = 'Complete', bar_length = 50)
     batch_X,  batch_Y = batch_train(currentIndex,batchSize,dataset, labelCount)
     if batch_X.shape[0] == 0:
         currentIndex = 0
         batch_X,  batch_Y = batch_train(currentIndex,batchSize,dataset, labelCount)
     currentIndex += batch_X.shape[0]
     #load train images and labelsinto tf session
-    train_data={X: batch_X, Y_: batch_Y, keep_prob: 1.0, phase_train: True}
+    train_data={X: batch_X, Y_: batch_Y, keep_prob: 0.8, phase_train: True}
     #run optimizer defined previously on training data
     sess.run(train_step, feed_dict=train_data)
     #calculate accuracy and cross enthropy for training data
@@ -240,14 +296,19 @@ for i in range((trainSamples / batchSize) * nTrain):
         print('accuracy: ',a)
         #calculate time metrics
         dt = (timeStop - timeStart) / float(nextLogs)
-        print("Iteration time: ", dt)
+        #print("Iteration time: ", dt)
         epochNo = (1 + i / (trainSamples / batchSize))
+        if i % (trainSamples / batchSize) == 0:
+            epochNo += 1
         leftEpoch =int( dt * ((trainSamples / batchSize) * epochNo - i)) / 60
         leftTotal =int( dt * ((trainSamples / batchSize) * nTrain - i)) / 60
-        if leftEpoch ==0:
-            leftEpoch = (dt * (trainSamples / batchSize)) / 60
+
         print ("Time left: %d minutes to save, %d minutes total (%d epochs left)" % (leftEpoch, leftTotal, nTrain - epochNo + 1))
         timeStart = time.time()
+        
+        print("Saving state")
+        model_saver.save(sess, saveName)
+        print("Save Complete!")
     #save exery epoch
     if i % (trainSamples / batchSize) == 0 and i != 0:
         print("Saving state")
