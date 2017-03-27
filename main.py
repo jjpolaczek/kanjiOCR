@@ -3,24 +3,34 @@ import numpy as np
 from os import listdir
 from os.path import isfile, join
 from controls import Controls
+from kanjiNN import KanjiNN
 import time
 
 def PreprocessingOCR(image, ctrl, resImg):
     resImg = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     #5 for median blur seems to be a good denoising strategy - does not work well without acceleration
     #timeStart = time.time()
-    resImg = cv2.medianBlur(resImg,(ctrl.t[2] - (ctrl.t[2] + 1) %2 + 2))
-    mask = cv2.adaptiveThreshold(resImg, ctrl.t[1], cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
-                                         cv2.THRESH_BINARY, 19,3)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
-    mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel,2)
+#    resImg = cv2.medianBlur(resImg,(ctrl.t[2] - (ctrl.t[2] + 1) %2 + 2))
+    resImg = cv2.GaussianBlur(resImg, (5,5),0)
+
+    
+ #   resImg = cv2.blur(resImg,(5,5))
+    #resImg = cv2.medianBlur(resImg,5)
+#    cv2.imshow('display',resImg)
+#    key = cv2.waitKey (10000)
+    #a, mask = cv2.threshold(resImg, 0, 255, cv2.THRESH_OTSU |cv2.THRESH_BINARY)
+    mask = cv2.adaptiveThreshold(resImg, ctrl.t[1], cv2.ADAPTIVE_THRESH_MEAN_C,\
+                                         cv2.THRESH_BINARY, 75,10)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7,7))
+    mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    
     #mask = cv2.erode(mask,kernel,3)
     
     #print (time.time() - timeStart)
     return mask
 def SegmentWords(mask, ctrl):
     tmp = cv2.bitwise_not(mask)
-    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS,(5,5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(7,7))
     tmp = cv2.dilate(tmp, kernel,iterations=15)
     im2,contours,hierarchy = cv2.findContours(tmp, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
     return mask, contours
@@ -64,6 +74,8 @@ def Split(image):
     zerosX = consecutive(zerosX[0])
     widthX = consecutive(widthX[0])
     #now just convert to list split lines
+    if (len(zerosX) < 2):
+        return image
     spaces = []
     widths = []
     spaceLen = []
@@ -145,18 +157,16 @@ def SplitWords(cutouts):
     retCnt = []
     #Only horizontal text is recognized
     for c in cutouts:
-        h = float(c.shape[0])
-        w = float(c.shape[1])
-        #if (w/h - 1.0) < shapeMargin:
-        #    retCnt.append(c)
-        #    continue
         words = Split(c)
+        if type(words) is not list:
+            words = [words]
         retCnt += words
     return retCnt
 def Normalize(cutouts):
     #center and scale letter to 75x75 pix (~ETL datasets)
     dimx = 75
     dimy = 75
+    retcutouts = []
     for c in cutouts:
 
         #getbounding box of the fragment
@@ -194,12 +204,14 @@ def Normalize(cutouts):
                                   borderType= cv2.BORDER_CONSTANT, value=[255,255,255] )
         c = cv2.resize(c,((dimx),(dimy)))
         c = cv2.GaussianBlur(c,(3,3),0)
-        cv2.imshow('display',c)
+        retcutouts.append(c)
+        #cv2.imshow('display',c)
 
-        cv2.waitKey(10000)
-    return cutouts
+        #cv2.waitKey(10000)
+    return retcutouts
 
 #MAIN
+net = KanjiNN("log/model.ckpt", "log/dict.pickle")
 #get list of source images in images folder
 imageList = [join("./images/",f) for f in listdir("./images/") if isfile(join("./images/",f)) and f[0] != '.']
 if len(imageList) == 0:
@@ -218,8 +230,8 @@ resImg = np.ones((image.shape[0], image.shape[1], 3), np.uint8)
 
 cv2.imshow('display',image)
 while True:
-    key = cv2.waitKey(4000)#100ms wait in event loop
-    if currentImageNo != ctrl.t[3]:
+    #key = cv2.waitKey(4000)#100ms wait in event loop
+    if currentImageNo != ctrl.t[3]: 
         image = cv2.imread(imageList[ctrl.t[3]])
         currentImageNo = ctrl.t[3]
     resImg = PreprocessingOCR(image, ctrl,resImg)
@@ -229,6 +241,20 @@ while True:
     cutouts = SplitWords(cutouts)
     cutouts = Normalize(cutouts)
     cv2.imshow('display',rectImg)
+    key = cv2.waitKey (10000)
+    if key == 27: #escape key 
+        break
+    cv2.imshow('display',image)
+    key = cv2.waitKey (10000)
+    for c in cutouts:
+        net.ProcessImage(c)
+        cv2.imshow('display',c)
+        key = cv2.waitKey (1000)
+        if key == 27: #escape key
+            key = 1
+            break
+    cv2.imshow('display',image)
+    key = cv2.waitKey (1000)
     if key == 27: #escape key 
         break
     #here all vision processing should be performed
