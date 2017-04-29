@@ -16,13 +16,9 @@ def padding(image, pad_size):
     return np.lib.pad(image,pad_size,padding_func)
 def GaussianBlur(image, size, sigma):
     #return ndimage.filters.gaussian_filter(image,sigma,mode='reflect')
-    def blur1d(img,f,axis):
+    def blur1d(img,f):
         res = padding(img,f.shape[0]/2)
-        print img.shape
-        print res.shape
-
         res= signal.convolve2d(res,f,mode='valid')
-        print res.shape
         return res
     fx = cv2.getGaussianKernel(size,sigma)
     fy = np.transpose(fx)
@@ -38,6 +34,12 @@ def GaussianBlur(image, size, sigma):
         res = blur1d(image,fx)
         return res.astype(image.dtype)
 def rectangle(image, begin,end,color,thickness):
+    pix = np.expand_dims(np.expand_dims(np.array(color),axis=0),axis=0)
+    #print pix.shape
+    image[begin[0]+1:begin[0]+thickness+1,begin[1]-1:end[1],:] = pix#vertical left
+    image[end[0] + 1:end[0]+thickness +1,begin[1]-1:end[1],:] = pix#vertical right
+    image[begin[0]+2:end[0]+2,begin[1]-thickness*0 - 1:begin[1]+thickness - 1] = pix #lower horizontal
+    image[begin[0]+2:end[0]+2,end[1]-thickness*0-1:end[1]+thickness-1] = pix #upper horizontal
     return image
 def adaptiveThreshold(image, thresh, offset, sth):
     return image,image
