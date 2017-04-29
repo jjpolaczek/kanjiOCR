@@ -8,23 +8,11 @@ import time
 
 def PreprocessingOCR(image, ctrl, resImg):
     resImg = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    #5 for median blur seems to be a good denoising strategy - does not work well without acceleration
-    #timeStart = time.time()
-#    resImg = cv2.medianBlur(resImg,(ctrl.t[2] - (ctrl.t[2] + 1) %2 + 2))
     resImg = cv2.GaussianBlur(resImg, (5,5),0)
-
-    
- #   resImg = cv2.blur(resImg,(5,5))
-    #resImg = cv2.medianBlur(resImg,5)
-#    cv2.imshow('display',resImg)
-#    key = cv2.waitKey (10000)
-    #a, mask = cv2.threshold(resImg, 0, 255, cv2.THRESH_OTSU |cv2.THRESH_BINARY)
     mask = cv2.adaptiveThreshold(resImg, ctrl.t[1], cv2.ADAPTIVE_THRESH_MEAN_C,\
                                          cv2.THRESH_BINARY, 75,10)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7,7))
     mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    
-    #mask = cv2.erode(mask,kernel,3)
     
     #print (time.time() - timeStart)
     return mask
