@@ -56,7 +56,7 @@ class KanjiNN:
         self.dictionary = pickle.load(open(pathToDict, "rb"))
         print ("Load Complete")
         labelCount = len(self.dictionary)
-        print (labelCount)
+        print ("Detected %d character labels" %(labelCount))
         
         #declare variables and io data
         self.X = tf.placeholder(tf.float32, [None,75,75])
@@ -125,20 +125,14 @@ class KanjiNN:
         saver.restore(self.sess, pathToModel)
         print("Restore Complete")
     def ProcessImage(self,image):
-        print (image.shape)
         if image.shape != (75,75):
             print ("Invalid shape", image.shape)
             return None
         image = image.astype(np.float32) / 255.0
         image = np.expand_dims(image, axis=0)
-        print (image.shape)
         #return 1
         #load train images and labelsinto tf session
         train_data={self.X: image, self.keep_prob: 1.0, self.phase_train: False}
         #calculate accuracy and cross enthropy fordata
         pred = self.sess.run(tf.argmax(self.Y,1),feed_dict=train_data)
-        print( self.dictionary[pred[0]])
-        
-#net = KanjiNN("log/model.ckpt", "log/dict.pickle")
-#img = cv2.imread("datasets/data/12384/ETL8B2_14243_2440.png", cv2.IMREAD_GRAYSCALE)
-#net.ProcessImage(img)
+        return(self.dictionary[pred[0]])
