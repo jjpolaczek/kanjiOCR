@@ -96,12 +96,37 @@ def erode(mask,kernel,iterations=1):
     return bitwise_not(ret)
     
     return mask
-def morphOpen(mask, kernel):
-    return mask
-def morpClose(mask,kernel):
-    return mask
+def morphOpen(mask, kernel,iterations=1):
+    ret = np.copy(mask)
+    for i in range(iterations):
+        ret = erode(ret,kernel)
+        ret = dilate(ret, kernel)
+    return ret
+def morphClose(mask,kernel,iterations=1):
+    ret = np.copy(mask)
+    for i in range(iterations):
+        ret = dilate(ret, kernel)
+        ret = erode(ret,kernel)
+    return ret
 def copyMakeBorder(image,top=0,bottom=0,left=0,right=0,value=[255,255,255]):
-    return image
+    newShape = image.shape
+    if image.ndim == 2:
+        newShape = (newShape[0] + top + bottom, newShape[1] + left + right)
+    elif image.ndim == 3:
+        newShape = (newShape[0] + top + bottom, newShape[1] + left + right, 3)
+    ret = np.zeros(newShape, dtype=image.dtype)
+    if image.ndim == 2:
+        ret[:,:] = value[0]
+        print ret[bottom:-top,left:-right].shape
+        np.copyto(ret[bottom:-top,left:-right],image)
+    elif image.ndim == 3:
+        ret[:,:,:] = np.array(value,dtype=np.uint8)
+        print ret[bottom:-top,left:-right,:].shape
+        np.copyto(ret[bottom:-top,left:-right,:],image)
+    else:
+        raise TypeError("Invalid dimensions either color or image")
+
+    return ret
 #To be done later
 def boundingRect(contour):
     return contour
@@ -111,16 +136,13 @@ def resize(image, size):
 def testarea():
     image =cv2.imread("images/test.jpeg")
     cv2.namedWindow('display', cv2.WINDOW_NORMAL)
-    cv2.namedWindow('display2', cv2.WINDOW_NORMAL)
     image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-    image, mask = adaptiveThresholdMean(image,255,75,10)
-    mask2 = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C,\
-                                             cv2.THRESH_BINARY, 75,10)
-    cv2.imshow('display2',mask2)
-    cv2.imshow('display',mask)
+    bord = copyMakeBorder(image,top=5,bottom=5,left=5,right=5,value=[255,255,255])
+
+    cv2.imshow('display',bord)
     while True:
         key = cv2.waitKey (100)
         if key == 27: #escape key 
             break
     cv2.destroyAllWindows()
-#testarea()
+testarea()

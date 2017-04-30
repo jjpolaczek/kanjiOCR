@@ -69,26 +69,38 @@ class TestImprocMethods(unittest.TestCase):
         print np.sum(mask1 != mask2)
         self.assertTrue(np.sum(mask1 != mask2) < mask1.size / 100)
     def test_dilate(self):
-        image = np.zeros((15,15), dtype=np.uint8)
-        image[5,5] = 255
+        image = np.random.randint(0,high=2,size=(15,15),dtype=np.uint8)
+        image[3:13,3:13]=0
+        image = image * 255
         kernel = np.ones((3,3))
-        im1 = improc.dilate(np.copy(image),kernel,iterations=4)
-        im2 = cv2.dilate(np.copy(image), kernel,iterations=4)
+        im1 = improc.dilate(image,kernel,iterations=4)
+        im2 = cv2.dilate(image, kernel,iterations=4)
         self.assertTrue((im1 == im2).all())
     def test_erode(self):
-        image = np.ones((15,15), dtype=np.uint8)
+        image = np.random.randint(0,high=2,size=(15,15),dtype=np.uint8)
+        image[3:13,3:13]=1
         image = image *255
-        image[5,5] = 0
         kernel = np.ones((3,3))
-        im1 = improc.erode(np.copy(image),kernel,iterations=4)
-        im2 = cv2.erode(np.copy(image), kernel,iterations=4)
+        im1 = improc.erode(image,kernel,iterations=4)
+        im2 = cv2.erode(image, kernel,iterations=4)
         self.assertTrue((im1 == im2).all())
-    def test_split(self):
-        s = 'hello world'
-        self.assertEqual(s.split(), ['hello', 'world'])
-        # check that s.split fails when the separator is not a string
-        with self.assertRaises(TypeError):
-            s.split(2)
+    def test_morphopen(self):
+        image = np.random.randint(0,high=2,size=(15,15),dtype=np.uint8)
+        image[3:13,3:13]=1
+        image = image *255
+        kernel = np.ones((3,3))
+        im1 = improc.morphOpen(image,kernel)
+        im2 = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+        self.assertTrue((im1 == im2).all()) 
+    def test_morphclose(self):
+        image = np.random.randint(0,high=2,size=(15,15),dtype=np.uint8)
+        image[3:13,3:13]=1
+        image = image *255
+        kernel = np.ones((3,3))
+        im1 = improc.morphClose(image,kernel)
+        im2 = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
+        self.assertTrue((im1 == im2).all()) 
+        
 
 if __name__ == '__main__':
     unittest.main()
