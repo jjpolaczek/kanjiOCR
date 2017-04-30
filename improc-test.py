@@ -99,7 +99,24 @@ class TestImprocMethods(unittest.TestCase):
         kernel = np.ones((3,3))
         im1 = improc.morphClose(image,kernel)
         im2 = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
-        self.assertTrue((im1 == im2).all()) 
+        self.assertTrue((im1 == im2).all())
+    def test_copymakeborder3D(self):
+        image = np.ones((10,10,3),dtype=np.uint8)
+        image = image *111
+        im1 = improc.copyMakeBorder(np.copy(image),top=1,bottom=2,left=3,right=4,\
+                                    value=[255,222,255])
+        im2 = cv2.copyMakeBorder(np.copy(image),top=1,bottom=2,left=3,right=4, \
+                                 borderType= cv2.BORDER_CONSTANT,value=[255,222,255])
+        self.assertTrue((im1 == im2).all())
+    def test_copymakeborder1D(self):
+        image = np.ones((10,10),dtype=np.uint8)
+        image = image *111
+        im1 = improc.copyMakeBorder(np.copy(image),top=1,bottom=2,left=3,right=4,\
+                                    value=[255,222,255])
+        im2 = cv2.copyMakeBorder(np.copy(image),top=1,bottom=2,left=3,right=4, \
+                                 borderType= cv2.BORDER_CONSTANT,value=[255,222,255])
+        
+        self.assertTrue((im1 == im2).all())
         
 
 if __name__ == '__main__':

@@ -117,12 +117,10 @@ def copyMakeBorder(image,top=0,bottom=0,left=0,right=0,value=[255,255,255]):
     ret = np.zeros(newShape, dtype=image.dtype)
     if image.ndim == 2:
         ret[:,:] = value[0]
-        print ret[bottom:-top,left:-right].shape
-        np.copyto(ret[bottom:-top,left:-right],image)
+        np.copyto(ret[top:-bottom,left:-right],image)
     elif image.ndim == 3:
         ret[:,:,:] = np.array(value,dtype=np.uint8)
-        print ret[bottom:-top,left:-right,:].shape
-        np.copyto(ret[bottom:-top,left:-right,:],image)
+        np.copyto(ret[top:-bottom,left:-right,:],image)
     else:
         raise TypeError("Invalid dimensions either color or image")
 
@@ -145,4 +143,4 @@ def testarea():
         if key == 27: #escape key 
             break
     cv2.destroyAllWindows()
-testarea()
+#testarea()
