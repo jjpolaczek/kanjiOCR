@@ -14,12 +14,14 @@ def padding_func(vector, pad_width, iaxis, kwargs):
     np.copyto(vector[-pad_width[1]:], np.flip(vector[-pad_width[1] * 2-1:-pad_width[1]-1],0))
 def padding(image, pad_size):
     return np.lib.pad(image,pad_size,padding_func)
-def Convolve2D(image, func,border='invert101'):
+def Convolve2D(image, func,border='invert101',cval=0):
     res = None
     if border == 'invert101':
         res = padding(image,func.shape[0]/2)
     elif border == 'replicate':
         res = np.lib.pad(image,func.shape[0]/2,mode='edge')
+    elif border == 'constant':
+        res = np.lib.pad(image,func.shape[0]/2,mode='constant',constant_values=cval)
     res = signal.convolve2d(res,func,mode='valid')
     return res
 def GaussianBlur(image, size, sigma,border='invert101'):
@@ -78,9 +80,33 @@ def adaptiveThresholdMean(image,value,windowSize,offset):
         else:
             c[()] = 0
     return image,out
+
+def dilate(mask,kernel,iterations=1):
+    ret = np.copy(mask)
+    for i in range(iterations):
+        ret = Convolve2D(ret,kernel,border='replicate')
+        ret = (ret > 0).astype(np.uint8) * 255
+    return ret
+def erode(mask,kernel,iterations=1):
+    ret = np.copy(mask)
+    ret = bitwise_not(ret)
+    for i in range(iterations):
+        ret = Convolve2D(ret,kernel,border='replicate')
+        ret = (ret > 0).astype(np.uint8) * 255
+    return bitwise_not(ret)
+    
+    return mask
+def morphOpen(mask, kernel):
+    return mask
+def morpClose(mask,kernel):
+    return mask
+def copyMakeBorder(image,top=0,bottom=0,left=0,right=0,value=[255,255,255]):
+    return image
 #To be done later
 def boundingRect(contour):
     return contour
+def resize(image, size):
+    return image
 
 def testarea():
     image =cv2.imread("images/test.jpeg")

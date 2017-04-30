@@ -68,6 +68,21 @@ class TestImprocMethods(unittest.TestCase):
                                              cv2.THRESH_BINARY, 75,10)
         print np.sum(mask1 != mask2)
         self.assertTrue(np.sum(mask1 != mask2) < mask1.size / 100)
+    def test_dilate(self):
+        image = np.zeros((15,15), dtype=np.uint8)
+        image[5,5] = 255
+        kernel = np.ones((3,3))
+        im1 = improc.dilate(np.copy(image),kernel,iterations=4)
+        im2 = cv2.dilate(np.copy(image), kernel,iterations=4)
+        self.assertTrue((im1 == im2).all())
+    def test_erode(self):
+        image = np.ones((15,15), dtype=np.uint8)
+        image = image *255
+        image[5,5] = 0
+        kernel = np.ones((3,3))
+        im1 = improc.erode(np.copy(image),kernel,iterations=4)
+        im2 = cv2.erode(np.copy(image), kernel,iterations=4)
+        self.assertTrue((im1 == im2).all())
     def test_split(self):
         s = 'hello world'
         self.assertEqual(s.split(), ['hello', 'world'])
