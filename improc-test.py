@@ -47,15 +47,27 @@ class TestImprocMethods(unittest.TestCase):
         x = 2
         y = 3
         w = 5
-        h = 5
+        h = 7
         l = 1
         im1 = cv2.rectangle(np.copy(image),(x,y),(x+w,y+h),(255,0,255),l)
-        print("AAFAFAWF")
-        print im1[:,:,0]
-        print("AGAGAGAGAGA")
         im2 = improc.rectangle(np.copy(image),(x,y),(x+w,y+h),(255,0,255),l)
-        print im2[:,:,0]
         self.assertTrue((im1 == im2).all())
+    def test_adaptivethresholdmean(self):
+        image = cv2.imread("images/test.jpeg")
+        image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+        image, mask1 = improc.adaptiveThresholdMean(image,255,75,10)
+        mask2 = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C,\
+                                             cv2.THRESH_BINARY, 75,10)
+        print np.sum(mask1 != mask2)
+        self.assertTrue(np.sum(mask1 != mask2) < mask1.size / 100)
+    def test_adaptivethresholdgauss(self):
+        image = cv2.imread("images/test.jpeg")
+        image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+        image, mask1 = improc.adaptiveThresholdGaussian(image,255,75,10)
+        mask2 = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+                                             cv2.THRESH_BINARY, 75,10)
+        print np.sum(mask1 != mask2)
+        self.assertTrue(np.sum(mask1 != mask2) < mask1.size / 100)
     def test_split(self):
         s = 'hello world'
         self.assertEqual(s.split(), ['hello', 'world'])
