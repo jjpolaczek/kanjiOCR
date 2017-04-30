@@ -32,9 +32,10 @@ while True:
     key = cv2.waitKey(10000)
     cutouts, chars = ocrEngine.ProcessImage(image)
     print ''.join(chars)
-    for c in cutouts:
+    for c,l in zip(cutouts,chars):
         #net.ProcessImage(c)
         cv2.imshow('display',c)
+        print l
         key = cv2.waitKey (1000)
         if key == 27: #escape key
             key = 1

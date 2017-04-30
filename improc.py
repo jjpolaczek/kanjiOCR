@@ -24,19 +24,44 @@ def Convolve2D(image, func,border='invert101',cval=0):
         res = np.lib.pad(image,func.shape[0]/2,mode='constant',constant_values=cval)
     res = signal.convolve2d(res,func,mode='valid')
     return res
+def Convolve2Lin(image, func,border='invert101',cval=0):
+    res = None
+    func = np.squeeze(func)
+    if border == 'invert101':
+        res = padding(image,func.shape[0]/2)
+    elif border == 'replicate':
+        res = np.lib.pad(image,func.shape[0]/2,mode='edge')
+    elif border == 'constant':
+        res = np.lib.pad(image,func.shape[0]/2,mode='constant',constant_values=cval)
+    rows = np.vsplit(res,res.shape[0])
+    funct = np.transpose(func)
+    rowsres = []
+    for r in rows:
+        rowsres.append(np.convolve(np.squeeze(r),func,mode='valid'))
+    tmp = np.vstack(rowsres)
+    cols = np.hsplit(tmp,tmp.shape[1])
+    #print cols[0].shape
+    colsres = []
+    for c in cols:
+        colsres.append(np.reshape(np.convolve(np.squeeze(c), func,mode='valid'),(image.shape[0],1)))
+    res = np.hstack(colsres)
+   #print colsres[0].shape
+   # print res.shape
+    #res = signal.convolve2d(res,func,mode='valid')
+    return res
 def GaussianBlur(image, size, sigma,border='invert101'):
     fx = cv2.getGaussianKernel(size,sigma)
-    fy = np.transpose(fx)
+    #fy = np.transpose(fx)
     #print fx
-    fx= np.multiply(fx,fy)
+    #fx= np.multiply(fx,fy)
     if image.ndim == 3:
         b, g, r = image[:,:,0], image[:,:,1], image[:,:,2]
-        b = Convolve2D(b,fx)
-        g = Convolve2D(g,fx)
-        r = Convolve2D(r,fx)
+        b = Convolve2Lin(b,fx)
+        g = Convolve2Lin(g,fx)
+        r = Convolve2Lin(r,fx)
         return  np.dstack((b,g,r)).astype(image.dtype)
     else:
-        res = Convolve2D(image,fx,border)
+        res = Convolve2Lin(image,fx,border)
         return res.astype(image.dtype)
 def rectangle(image, begin,end,color,thickness):
     pix = np.expand_dims(np.expand_dims(np.array(color),axis=0),axis=0)
@@ -68,12 +93,14 @@ def adaptiveThresholdMean(image,value,windowSize,offset):
     refImage = np.copy(image)
     nmask = np.ones((windowSize,windowSize), dtype=np.float32)
     nmask = nmask / nmask.size
-    refImage = Convolve2D(image,nmask,border='replicate')
+    #refImage = Convolve2D(image,nmask,border='replicate')
+    refImage = Convolve2Lin(image,np.ones((windowSize),dtype=np.float32)/windowSize,border='replicate')
     refImage = refImage - offset
+
     out = np.zeros(image.shape, dtype=np.uint8)
     it = np.nditer([image,refImage,out],[],
                    [['readonly'], ['readonly'], ['writeonly']])                   
-
+    
     for (a,b,c) in it:
         if a > b:
             c[()] = value
@@ -135,9 +162,9 @@ def testarea():
     image =cv2.imread("images/test.jpeg")
     cv2.namedWindow('display', cv2.WINDOW_NORMAL)
     image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-    bord = copyMakeBorder(image,top=5,bottom=5,left=5,right=5,value=[255,255,255])
+    image = GaussianBlur(image,5,1)
 
-    cv2.imshow('display',bord)
+    cv2.imshow('display',image)
     while True:
         key = cv2.waitKey (100)
         if key == 27: #escape key 
