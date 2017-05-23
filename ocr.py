@@ -4,11 +4,11 @@ from kanjiNN import KanjiNN
 import improc
 
 def PreprocessingOCR(image,resImg):
-    resImg = improc.cvtColor2Gray(image)
-    resImg = improc.GaussianBlur(resImg, 5,0)
-    resImg,mask = improc.adaptiveThresholdMean(resImg, 255, 75,10)
+    resImg = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    resImg = cv2.GaussianBlur(resImg, (5,5),0)
+    mask = cv2.adaptiveThreshold(resImg, 255,cv2.ADAPTIVE_THRESH_MEAN_C,\
+-                                         cv2.THRESH_BINARY, 75,10)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7,7))
-    print kernel
     mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     
     return mask
