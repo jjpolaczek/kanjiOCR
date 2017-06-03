@@ -4,19 +4,19 @@ from kanjiNN import KanjiNN
 import improc
 
 def PreprocessingOCR(image,resImg):
-    resImg = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    resImg = cv2.GaussianBlur(resImg, (5,5),0)
+    resImg = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)#implemented
+    resImg = cv2.GaussianBlur(resImg, (5,5),0)#implemented
     mask = cv2.adaptiveThreshold(resImg, 255,cv2.ADAPTIVE_THRESH_MEAN_C,\
--                                         cv2.THRESH_BINARY, 75,10)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7,7))
-    mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+-                                         cv2.THRESH_BINARY, 75,10)#implemented
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7,7))#implemented
+    mask= cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)#implemented
     
     return mask
 def SegmentWords(mask):
-    tmp = cv2.bitwise_not(mask)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(7,7))
-    tmp = cv2.dilate(tmp, kernel,iterations=15)
-    im2,contours,hierarchy = cv2.findContours(tmp, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+    tmp = cv2.bitwise_not(mask)#implemented
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(7,7))#implemented
+    tmp = cv2.dilate(tmp, kernel,iterations=15)#implemented
+    im2,contours,hierarchy = cv2.findContours(tmp, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     return mask, contours
 def DrawContours(image, cnts):
     # loop over the contours
@@ -26,7 +26,7 @@ def DrawContours(image, cnts):
         [x,y,w,h] = cv2.boundingRect(contour)
         if h < 80 or w < 80:
             continue
-        cv2.rectangle(image_color,(x,y),(x+w,y+h),(255,0,255),2)
+        cv2.rectangle(image_color,(x,y),(x+w,y+h),(255,0,255),2)#implemented
     return image_color
 def CutoutWords(image, cnts):
     cutouts = []
@@ -187,7 +187,7 @@ def Normalize(cutouts):
                                   left=xBorder, right=xBorder,\
                                   borderType= cv2.BORDER_CONSTANT, value=[255,255,255] )
         c = cv2.resize(c,((dimx),(dimy)))
-        c = cv2.GaussianBlur(c,(3,3),0)
+        c = cv2.GaussianBlur(c,(3,3),0)#implemented
         retcutouts.append(c)
     return retcutouts        
 

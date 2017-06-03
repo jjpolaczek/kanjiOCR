@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
-from scipy import signal, ndimage
+from scipy import signal, ndimage, interpolate
+import math
 def bitwise_not(mask):
     return np.invert(np.squeeze(mask))
 def cvtColor2Gray(rgb):
@@ -154,9 +155,139 @@ def copyMakeBorder(image,top=0,bottom=0,left=0,right=0,value=[255,255,255]):
     return ret
 #To be done later
 def boundingRect(contour):
-    return contour
+    #this makes sense only if contour has members#
+    if not(contour.shape[0] > 0 and contour.shape[1] == 1 and contour.shape[2] == 2):
+        raise TypeError("Invalid dimensions of contour")
+    minx = contour[0,0,0]
+    maxx = minx
+    miny = contour[0,0,1]
+    maxy = miny
+    #print contour.shape
+    for cnt in range(contour.shape[0]):
+        x = contour[cnt,0,0]
+        y = contour[cnt,0,1]
+        if x > maxx:
+            maxx = x
+        if x < minx:
+            minx = x
+        if y > maxy:
+            maxy = y
+        if y < miny:
+            miny = y
+    return (minx,miny,maxx-minx + 1, maxy-miny + 1)
+def _getNeighbours(limits, pixel):
+    neigList = []
+    x = pixel[0]
+    y = pixel[1]
+    up = y + 1
+    dn = y - 1
+    right = x + 1
+    left = x - 1
+    #constrain expansion
+    if dn >= 0:
+        neigList.append((x,dn))
+    if right < limits[0]:
+        neigList.append((right,y));
+
+    if up < limits[1]:
+        neigList.append((x,up))
+    if left >= 0:
+        neigList.append((left,y));
+
+    return neigList
+        
+def findContours(mask):
+    visited = np.zeros(mask.shape, dtype=np.uint8)
+    contours = []
+
+
+    def IsEdgePixel(maskPassed0, pixel):
+        if maskPassed0[pixel[0],pixel[1]] > 0:
+            neighs = _getNeighbours(mask.shape, pixel)
+            for point in neighs:
+                if maskPassed0[point[0], point[1]] == 0:
+                    return True
+        return False
+    
+    def visitRegion(maskPassed, visitedPassed,pixel):
+        contour = np.array([[(j,i)]],dtype=np.int32)
+        visitedPassed[i,j] = 1
+        def recVisit(maskPassed1,visitedPassed1, pixel, contour):
+            neighs = _getNeighbours(maskPassed1.shape, pixel)
+            visitedPassed1[pixel[0],pixel[1]] = 1 # mark as visitted - it is edge as we just visited it
+            for point in neighs:
+                if maskPassed1[point[0],point[1]] > 0 and visitedPassed1[point[0],point[1]] == 0:
+                    if IsEdgePixel(maskPassed1, point):
+                        # add pixel to edgecontour
+                        #print ("Stacking",point)
+                        contour = np.vstack((contour,np.array([[(point[1],point[0])]],dtype=np.int32)))
+                        contour = recVisit(maskPassed1,visitedPassed1, point, contour) # call neighbouring edge pixel out
+                    else:
+                        FillInside(maskPassed1,visitedPassed1, point)
+            return contour
+        def FillInside(maskPassed1,visitedPassed1, pixel):
+            neighs = _getNeighbours(maskPassed1.shape, pixel)
+            visitedPassed1[pixel[0],pixel[1]] = 1 # mark as visitted - it is edge as we just visited it
+            for point in neighs:
+                if maskPassed1[point[0],point[1]] > 0 and visitedPassed1[point[0],point[1]] == 0:
+                    if not IsEdgePixel(maskPassed1, point):
+                        #ignore - it will be caught later
+                   # else:
+                        FillInside(maskPassed1,visitedPassed1, point)
+            return
+        
+        contour = recVisit(maskPassed,visitedPassed,pixel,contour)
+        return contour
+    
+    for i in range(mask.shape[0]):
+        for j in range(mask.shape[1]):
+            if visited[i,j] == 0:
+                if mask[i,j] != 0:
+                    print (i,j)
+                    contours.append(visitRegion(mask,visited,(i,j)))
+
+
+    # this is stupid but order in opencv list is reversed
+    return contours[::-1]
 def resize(image, size):
-    return image
+    rows, cols = image.shape
+    #print "Resize operation"
+   # print image.shape
+    n_rows = size[1]
+    n_cols = size[0]
+    scalex = float(n_cols-1) / (cols-1)
+    scaley = float(n_rows-1) / (rows-1)
+    enlarged_img = np.ones((n_rows, n_cols),dtype=np.uint8)
+
+    print("RC")
+    print image.shape
+    print(n_rows,n_cols)
+    for r in range(n_rows):
+        for c in range(n_cols):
+            x_coord = float(r) /scalex
+            y_coord = float(c) /scaley
+            #print(r,y_coord,int(math.floor(y_coord)),int(math.ceil(y_coord)))
+            #print(c,x_coord,int(math.floor(x_coord)),int(math.ceil(x_coord)))
+            xc = int(math.ceil(x_coord))
+            xf = int(math.floor(x_coord))
+            yc = int(math.ceil(y_coord))
+            yf = int(math.floor(y_coord))
+            if xc >= image.shape[1]:
+                xc = image.shape[1]-1
+            if yc >= image.shape[0]:
+                yc = image.shape[0]-1
+            W_xc = xc - x_coord
+            W_xf = 1- W_xc#x_coord - xf
+            W_yc = yc - y_coord
+            W_yf = 1 - W_yc#y_coord - yf
+            #print(W_xc, W_xf,W_yc,W_yf)
+            #enlarged_img[c, r] =
+            print(xc, xf,yc,yf)
+            print(r,c)# r x, c y
+            #enlarged_img[r,c] =  (np.around(W_xc * (W_yc * image[xf, yf] + W_yf * image[xc, yf]) + W_xf * (W_yc * image[xf, yc] + W_yf * image[xc, yc]), 0))
+            enlarged_img[r,c] =  (np.around(W_xc * (W_yc * image[yf, xf] + W_yf * image[yc, xf]) + W_xf * (W_yc * image[yf, xc] + W_yf * image[yc, xc]), 0))
+
+    return enlarged_img
 
 def testarea():
     image =cv2.imread("images/test.jpeg")
@@ -170,4 +301,5 @@ def testarea():
         if key == 27: #escape key 
             break
     cv2.destroyAllWindows()
+
 #testarea()

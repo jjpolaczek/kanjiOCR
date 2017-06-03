@@ -117,7 +117,43 @@ class TestImprocMethods(unittest.TestCase):
                                  borderType= cv2.BORDER_CONSTANT,value=[255,222,255])
         
         self.assertTrue((im1 == im2).all())
+    def test_findcontours(self):
+        image = np.zeros((15,15),dtype=np.uint8)
+        image[3:7,3:5]=1#first rectangle
+        image[7:14,8:12]=1#second rectangle
+        image = image *255
+        im2,res1,hierarchy = cv2.findContours(np.copy(image), cv2.RETR_EXTERNAL\
+                                                  ,cv2.CHAIN_APPROX_NONE)
+        res2 = improc.findContours(image)
         
+        self.assertTrue(len(res1) == len(res2))
+        for i in range(len(res1)):
+            self.assertTrue((res1[i]==res2[i]).all())
+    def test_boundingrect(self):
+        image = np.zeros((15,15),dtype=np.uint8)
+        image[3:7,3:4]=1
+        image[7:14,8:12]=1
+        image = image *255
+        im2,contours,hierarchy = cv2.findContours(image, cv2.RETR_EXTERNAL\
+                                                  ,cv2.CHAIN_APPROX_NONE)
+        
+        for cnt in contours:
+            ret1 = cv2.boundingRect(cnt)
+            ret2 = improc.boundingRect(cnt)
+            self.assertTrue((ret1 == ret2))
+    def test_resize(self):
+        image = np.random.randint(0,high=2,size=(3,2),dtype=np.uint8)
+        image = image *255
+        dimx = 4
+        dimy = 5
+        res1 = cv2.resize(np.copy(image),((dimx),(dimy)))
+        
+        
+        res2 = improc.resize(np.copy(image),((dimx),(dimy)))
+        print image
+        print res2
+        print res1
+        self.assertTrue(np.isclose(res1,res2,atol=0.01).all())
 
 if __name__ == '__main__':
     unittest.main()
