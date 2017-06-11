@@ -250,44 +250,31 @@ def findContours(mask):
     # this is stupid but order in opencv list is reversed
     return contours[::-1]
 def resize(image, size):
-    rows, cols = image.shape
-    #print "Resize operation"
-   # print image.shape
-    n_rows = size[1]
-    n_cols = size[0]
-    scalex = float(n_cols-1) / (cols-1)
-    scaley = float(n_rows-1) / (rows-1)
-    enlarged_img = np.ones((n_rows, n_cols),dtype=np.uint8)
+    w=image.shape[0]
+    h=image.shape[1]
+    w2 = size[1]
+    h2 = size[0]
+    temp = np.ones((w2,h2),dtype=np.uint8)
+    x_ratio = float(w - 1)/float(w2)
+    y_ratio = float(h-1)/float(h2)
+    for i in range(h2):
+        for j in range(w2):
+            x = int(x_ratio * j)
+            y = int(y_ratio * i)
+            x_diff = float(x_ratio * j) - x
+            y_diff = float(y_ratio * i) - y
+            index = y * w + x
+            A = image[x,y]
+            B = image[x+1,y]
+            C = image[x,y+1]
+            D = image[x+1,y+1]
+            gray = (int)( \
+                    A*(1-x_diff)*(1-y_diff) +  B*(x_diff)*(1-y_diff) + \
+                    C*(y_diff)*(1-x_diff)   +  D*(x_diff*y_diff) \
+                    )
+            temp[j,i] = gray
+    return temp
 
-    print("RC")
-    print image.shape
-    print(n_rows,n_cols)
-    for r in range(n_rows):
-        for c in range(n_cols):
-            x_coord = float(r) /scalex
-            y_coord = float(c) /scaley
-            #print(r,y_coord,int(math.floor(y_coord)),int(math.ceil(y_coord)))
-            #print(c,x_coord,int(math.floor(x_coord)),int(math.ceil(x_coord)))
-            xc = int(math.ceil(x_coord))
-            xf = int(math.floor(x_coord))
-            yc = int(math.ceil(y_coord))
-            yf = int(math.floor(y_coord))
-            if xc >= image.shape[1]:
-                xc = image.shape[1]-1
-            if yc >= image.shape[0]:
-                yc = image.shape[0]-1
-            W_xc = xc - x_coord
-            W_xf = 1- W_xc#x_coord - xf
-            W_yc = yc - y_coord
-            W_yf = 1 - W_yc#y_coord - yf
-            #print(W_xc, W_xf,W_yc,W_yf)
-            #enlarged_img[c, r] =
-            print(xc, xf,yc,yf)
-            print(r,c)# r x, c y
-            #enlarged_img[r,c] =  (np.around(W_xc * (W_yc * image[xf, yf] + W_yf * image[xc, yf]) + W_xf * (W_yc * image[xf, yc] + W_yf * image[xc, yc]), 0))
-            enlarged_img[r,c] =  (np.around(W_xc * (W_yc * image[yf, xf] + W_yf * image[yc, xf]) + W_xf * (W_yc * image[yf, xc] + W_yf * image[yc, xc]), 0))
-
-    return enlarged_img
 
 def testarea():
     image =cv2.imread("images/test.jpeg")
